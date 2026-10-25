@@ -54,8 +54,14 @@ import net.minecraft.world.phys.Vec3;
  */
 public abstract class AbstractDrawnEntity extends VehicleEntity {
 
+    // Real user report, 2026-10-25: "the connection... seems to snap when further than 1 block
+    // apart... will be an issue while moving quickly." Raised from 2.0, and -- the actual bug --
+    // the post-move check below used to have its own separate, tighter hardcoded +1.0D slack
+    // instead of this constant, so a cart that hadn't fully caught up yet within the SAME tick
+    // (e.g. while the puller is sprinting) could get cut loose even though the pre-move check
+    // would have tolerated it. Both checks now share this one value.
     /** How far (in blocks, beyond the puller's own resting spacing) this cart will try to stay from its puller before giving up and detaching. */
-    private static final double MAX_SLACK_BLOCKS = 2.0;
+    private static final double MAX_SLACK_BLOCKS = 3.0;
     private static final double CATCH_UP_RATE = 0.2D;
 
     protected List<CartWheel> wheels;
@@ -143,7 +149,7 @@ public abstract class AbstractDrawnEntity extends VehicleEntity {
             for (final CartWheel wheel : this.wheels) {
                 wheel.tick();
             }
-        } else if (relativeTargetVec().length() > relativeSpacing + 1.0D) {
+        } else if (relativeTargetVec().length() > relativeSpacing + MAX_SLACK_BLOCKS) {
             this.setPulling(null);
         }
     }
