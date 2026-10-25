@@ -2,8 +2,11 @@
 
 This project's core towing-physics/hitching design (`entity/AbstractDrawnEntity`,
 `entity/AbstractDrawnInventoryEntity`, `entity/HandCartEntity`, `item/HandCartItem`,
-`util/CartWheel`, `util/CaryvanWorld`, `network/ActionKeyPayload`, `network/ToggleSlowPayload`)
-is adapted from **NiftyCarts**, a Fabric mod by jmb05:
+`util/CartWheel`, `util/CaryvanWorld`, `network/ToggleSlowPayload`), its real 3D model geometry
+(`client/renderer/entity/model/HandCartModel`, `EasyMeshBuilder`), and its item/entity icon art
+(`textures/item/hand_cart.png`, derived from NiftyCarts' own icon; `textures/entity/hand_cart.png`
+reuses only its UV layout, not its actual pixel art -- see that file's own generation notes in
+decisions.md) is adapted from **NiftyCarts**, a Fabric mod by jmb05:
 
 - Repository: https://github.com/jmb05/nifty-carts
 - License: MIT
