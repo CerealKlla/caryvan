@@ -88,6 +88,11 @@ dependencies {
     testCompileOnly files("../Nuclyus/build/libs/nuclyus-${nuclyus_version}.jar")
     testRuntimeOnly files("../Nuclyus/build/libs/nuclyus-${nuclyus_version}.jar")
 
+    // Optional soft dependency -- contributes a ready-to-place Hand Cart into Kyt's mod-managed Dev
+    // Kyt, gated behind ModList.get().isLoaded("kyt") in CaryvanMod. Same pattern Blueprynts/
+    // Settlemynts already use for their own Dev Kyt contributions.
+    compileOnly files("../Kyt/build/libs/kyt-${kyt_version}.jar")
+
     // Plain JUnit 5 for pure logic tests (no live server/registry needed, so ModDevGradle's
     // neoForge { unitTest {} } FML-bootstrap machinery isn't required for those).
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'

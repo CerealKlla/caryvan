@@ -3,7 +3,6 @@ package com.github.cerealklla.caryvan;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import com.github.cerealklla.caryvan.client.renderer.entity.HandCartRenderer;
-import com.github.cerealklla.caryvan.network.ActionKeyPayload;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 
@@ -31,19 +30,15 @@ public class CaryvanModClient {
     public CaryvanModClient(ModContainer container) {
     }
 
-    // "R" is already Settlemynts' own Auto-Drop key -- confirmed harmless (every mod's keybinds are
-    // independent, this is purely to avoid confusing a player who has both mods installed), so this
-    // uses "H" instead, free across the whole suite as of 2026-10-25. Easy-to-rebind placeholder,
-    // same as every other keybind in this project.
-    public static final KeyMapping HITCH = new KeyMapping(
-            "key.caryvan.hitch", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H, KeyMapping.Category.MISC);
-
+    // Hitch/unhitch no longer has its own keybind at all, 2026-10-25, explicit user correction --
+    // "same as horses/chairs: right click toggles, left shift auto dismounts" -- see
+    // entity.AbstractDrawnEntity#tryToggleHitch/#pulledTick's own shift-check. Only the slow-pull
+    // toggle still needs a dedicated key.
     public static final KeyMapping TOGGLE_SLOW = new KeyMapping(
             "key.caryvan.toggle_slow", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_J, KeyMapping.Category.MISC);
 
     @SubscribeEvent
     static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
-        event.register(HITCH);
         event.register(TOGGLE_SLOW);
     }
 
@@ -59,9 +54,6 @@ public class CaryvanModClient {
             // early-return -- same guard every other keybind handler in this suite already uses, so
             // a held key doesn't fire the instant a GUI closes.
             return;
-        }
-        while (HITCH.consumeClick()) {
-            send(new ActionKeyPayload());
         }
         while (TOGGLE_SLOW.consumeClick()) {
             send(new ToggleSlowPayload());

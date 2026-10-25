@@ -101,6 +101,13 @@ public abstract class AbstractDrawnEntity extends VehicleEntity {
         if (this.pulling == null) {
             return;
         }
+        // "Left shift auto dismounts" (explicit user spec, 2026-10-25, same convention as mounting
+        // any vanilla vehicle) -- checked every tick, not just at interact-time, so sneaking while
+        // already walking/pulling detaches immediately with no click needed.
+        if (this.pulling instanceof net.minecraft.world.entity.player.Player player && player.isShiftKeyDown()) {
+            this.setPulling(null);
+            return;
+        }
         final Vec3 targetVec = relativeTargetVec();
         this.setYRot(yawTowards(targetVec));
         while (this.getYRot() - this.yRotO < -180.0F) {
@@ -155,7 +162,7 @@ public abstract class AbstractDrawnEntity extends VehicleEntity {
         return this.pulling;
     }
 
-    /** Whether {@code entity} is currently allowed to become this cart's puller. Hand Cart restricts this to the player holding its action key -- see {@link HandCartEntity#canBePulledBy}. */
+    /** Whether {@code entity} is currently allowed to become this cart's puller. Hand Cart restricts this to players only -- see {@link HandCartEntity#canBePulledBy}. */
     protected boolean canBePulledBy(final Entity entity) {
         return (this.pulling == null || !this.pulling.isAlive()) && !this.hasPassenger(entity);
     }
@@ -174,6 +181,25 @@ public abstract class AbstractDrawnEntity extends VehicleEntity {
             wheel.clearIncrement();
         }
         CaryvanWorld.get((ServerLevel) this.level()).setPulling(this, entity);
+    }
+
+    /**
+     * "Right click toggles" (explicit user spec, 2026-10-25) -- same interaction idiom as mounting a
+     * vanilla horse/boat: a plain right-click on the cart hitches {@code player} if nothing's
+     * currently pulling it, or unhitches {@code player} if they're the one already pulling it.
+     * Returns {@code null} (meaning "not consumed, try something else -- e.g. open the inventory")
+     * if neither applies, e.g. the cart is already hitched to someone/something else.
+     */
+    protected net.minecraft.world.InteractionResult tryToggleHitch(final net.minecraft.world.entity.player.Player player) {
+        if (this.pulling == player) {
+            this.setPulling(null);
+            return net.minecraft.world.InteractionResult.SUCCESS;
+        }
+        if (this.pulling == null) {
+            this.setPulling(player);
+            return this.pulling == player ? net.minecraft.world.InteractionResult.SUCCESS : null;
+        }
+        return null;
     }
 
     /** Re-establishes {@link #pulling} after a chunk/entity reload, from the persisted UUID. */

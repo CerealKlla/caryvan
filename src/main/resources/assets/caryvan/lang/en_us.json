@@ -1,7 +1,6 @@
 {
   "item.caryvan.hand_cart": "Hand Cart",
   "entity.caryvan.hand_cart": "Hand Cart",
-  "key.caryvan.hitch": "Hitch/Unhitch Cart",
   "key.caryvan.toggle_slow": "Toggle Slow Pulling",
   "key.categories.misc": "Miscellaneous"
 }

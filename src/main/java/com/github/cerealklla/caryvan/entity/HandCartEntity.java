@@ -2,6 +2,8 @@ package com.github.cerealklla.caryvan.entity;
 
 import com.github.cerealklla.caryvan.registration.ModItems;
 
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Inventory;
@@ -10,6 +12,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Phase 1 of the design document's build order -- player-pulled directly (no animal), real
@@ -17,6 +20,12 @@ import net.minecraft.world.level.Level;
  * precedent as Kyt/Yconomics' own menus elsewhere in this suite). Adapted from NiftyCarts'
  * {@code HandCartEntity} (MIT licensed, see this repo's own CLAUDE.md), which also uses a plain
  * 27-slot chest menu for this cart.
+ *
+ * <p><b>Hitch interaction reworked 2026-10-25, explicit user correction</b> -- "same as horses/
+ * chairs: right click toggles, left shift auto dismounts," replacing an earlier dedicated keybind
+ * (deleted along with {@code network.ActionKeyPayload}). A plain right-click toggles hitch/unhitch
+ * (see {@link AbstractDrawnEntity#tryToggleHitch}); sneak+right-click opens the cargo inventory
+ * instead, the same split {@code AbstractChestBoat} itself uses (board vs. open storage).
  */
 public final class HandCartEntity extends AbstractDrawnInventoryEntity {
 
@@ -37,10 +46,19 @@ public final class HandCartEntity extends AbstractDrawnInventoryEntity {
         return ModItems.HAND_CART.get();
     }
 
-    /** Only the player actually pulling it (via the action key) -- no animal AI exists to make anything else want to grab one. */
+    /** Only a player's own right-click can hitch it -- no animal AI exists to make anything else want to grab one. */
     @Override
     protected boolean canBePulledBy(final Entity entity) {
         return entity instanceof Player && super.canBePulledBy(entity);
+    }
+
+    @Override
+    public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
+        if (player.isShiftKeyDown()) {
+            return super.interact(player, hand, location);
+        }
+        final InteractionResult result = tryToggleHitch(player);
+        return result != null ? result : super.interact(player, hand, location);
     }
 
     @Override

@@ -35,3 +35,12 @@ cargo and passengers. See context/design-document.md for the full design.
     reason="Foundation mod for shared base classes/contracts across the suite."
     ordering="AFTER"
     side="BOTH"
+
+# Optional -- contributes a ready-to-place Hand Cart item into Kyt's mod-managed "Dev" Kyt if Kyt is
+# present; this mod works standalone without it.
+[[dependencies.${mod_id}]]
+    modId="kyt"
+    type="optional"
+    reason="Contributes Caryvan's Hand Cart debug item into Kyt's mod-managed Dev Kyt."
+    ordering="AFTER"
+    side="BOTH"
