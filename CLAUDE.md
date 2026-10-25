@@ -60,6 +60,16 @@ Scaffolded 2026-10-25 (see [context/decisions.md](context/decisions.md)):
 - Depends on **Nuclyus** (required, same as every mod in the suite).
 - No sibling-mod dependencies yet — see design-document.md's "Integration points" section for the
   planned (not-yet-built) optional hooks into Settlemynts/Lyfe/Yconomics.
-- `./gradlew compileJava` green. No real features implemented yet — bare `@Mod` class only.
 
-See [context/design-document.md](context/design-document.md) for the real plan.
+**Phase 1 (foundation + Hand Cart) built 2026-10-25** (see [context/decisions.md](context/decisions.md))
+— `entity.AbstractDrawnEntity` (towing physics, extends vanilla's `VehicleEntity`), `entity.
+AbstractDrawnInventoryEntity` (real cargo via vanilla's `ContainerEntity` interface), `entity.
+HandCartEntity` (27-slot storage via `ChestMenu.threeRows`, player-pulled only), `item.
+HandCartItem` (raycast placement), `util.CartWheel`/`util.CaryvanWorld` (wheel rotation, the
+puller-before-cart tick-ordering registry), `network.ActionKeyPayload`/`ToggleSlowPayload`
+(hitch/unhitch, slow-pull toggle — keybinds H/J). See **THIRD_PARTY_NOTICES.md** — the core
+towing/hitching design is adapted from NiftyCarts (MIT). `./gradlew compileJava` green,
+whole-suite (14 mods) rebuild + both `runServer` and `runClient` boot-smoke-tested clean.
+**Placement/hitching/towing itself not yet live-tested** (needs real play).
+
+See [context/design-document.md](context/design-document.md) for the full plan (Phases 2-5 not started).
