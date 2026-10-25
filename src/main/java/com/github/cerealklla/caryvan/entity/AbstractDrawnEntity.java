@@ -117,16 +117,22 @@ public abstract class AbstractDrawnEntity extends VehicleEntity {
             this.yRotO += 360.0F;
         }
 
-        final Vec3 flatTarget = this.pulling.onGround() ? new Vec3(targetVec.x, 0.0D, targetVec.z) : targetVec;
+        // Real user report, 2026-10-25: "when changing heights the box was rubber banding vertically
+        // back to the originally placed Y position." Root cause: the reference mod's own logic
+        // (ported faithfully at first) flattens the target vector's Y to 0 whenever the puller is
+        // "on ground" -- true almost all the time while walking, including on stairs/slopes -- so
+        // the cart's own Y was never actually chased at all, only nudged by vanilla's incidental
+        // step-up-on-collision behavior. Using the real 3D target vector throughout (never flattened)
+        // fixes it: the cart now genuinely chases the puller's real height, not just their XZ position.
         final double relativeSpacing = Math.max(this.getSpacing() + 0.5D * this.pulling.getBbWidth(), 1.0D);
-        final double diff = flatTarget.length() - relativeSpacing;
+        final double diff = targetVec.length() - relativeSpacing;
         if (diff > MAX_SLACK_BLOCKS) {
             this.setPulling(null);
             return;
         }
         final Vec3 move = Math.abs(diff) < CATCH_UP_RATE
                 ? this.getDeltaMovement()
-                : this.getDeltaMovement().add(flatTarget.subtract(flatTarget.normalize().scale(relativeSpacing + CATCH_UP_RATE * Math.signum(diff))));
+                : this.getDeltaMovement().add(targetVec.subtract(targetVec.normalize().scale(relativeSpacing + CATCH_UP_RATE * Math.signum(diff))));
 
         this.setOnGround(true);
         this.move(MoverType.SELF, move);
