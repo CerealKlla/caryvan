@@ -1,0 +1,37 @@
+license="${mod_license}"
+
+[[mods]] #mandatory
+
+modId="${mod_id}" #mandatory
+
+version="${mod_version}" #mandatory
+
+displayName="${mod_name}" #mandatory
+
+description='''
+Hand carts, horse-drawn carts, and wagons -- player-pushed and animal-drawn vehicles for hauling
+cargo and passengers. See context/design-document.md for the full design.
+'''
+
+[[dependencies.${mod_id}]] #optional
+    modId="neoforge" #mandatory
+    type="required" #mandatory
+    versionRange="[${neo_version},)" #mandatory
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+# Nuclyus is the suite's foundation mod -- required (not optional) for every mod, starting with the
+# cross-mod menu-contribution system (see Nuclyus' own CLAUDE.md).
+[[dependencies.${mod_id}]]
+    modId="nuclyus"
+    type="required"
+    reason="Foundation mod for shared base classes/contracts across the suite."
+    ordering="AFTER"
+    side="BOTH"
