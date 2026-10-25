@@ -1,10 +1,6 @@
 {
   "model": {
-    "type": "minecraft:special",
-    "base": "minecraft:item/chest",
-    "model": {
-      "type": "minecraft:chest",
-      "texture": "minecraft:normal"
-    }
+    "type": "minecraft:model",
+    "model": "caryvan:item/hand_cart"
   }
 }

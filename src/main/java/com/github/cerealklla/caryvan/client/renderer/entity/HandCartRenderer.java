@@ -1,38 +1,36 @@
 package com.github.cerealklla.caryvan.client.renderer.entity;
 
+import com.github.cerealklla.caryvan.CaryvanMod;
+import com.github.cerealklla.caryvan.client.renderer.entity.model.HandCartModel;
 import com.github.cerealklla.caryvan.client.renderer.entity.state.HandCartRenderState;
 import com.github.cerealklla.caryvan.entity.HandCartEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.renderer.entity.state.EntityRenderState;
-import net.minecraft.client.renderer.item.ItemModelResolver;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
 
 /**
- * {@link HandCartEntity}'s client renderer -- a floating {@link Items#CHEST} icon, same
- * "no dedicated model/texture yet, render a real vanilla item so the entity is at least visible and
- * findable" placeholder {@code bag.client.LootBagRenderer} (Yconomics) already established in this
- * suite. The design document flags a real mesh/texture model as the single piece of this mod most
- * likely to need genuine new engineering (see this repo's CLAUDE.md/design-document.md §3) -- this
- * is deliberately not that, just enough to see where a Hand Cart actually is and confirm the physics
- * underneath it work. Also what keeps the entity from crashing the client the instant one spawns in
- * view at all -- every custom {@code Entity} needs *some* registered renderer (confirmed the hard
- * way in this exact codebase; see {@code LootBagRenderer}'s own doc).
+ * {@link HandCartEntity}'s real client renderer -- replaces the earlier placeholder floating-chest
+ * icon (see this repo's own CLAUDE.md/decisions.md, 2026-10-25) with {@link HandCartModel}'s actual
+ * geometry, adapted from NiftyCarts (MIT licensed, see this repo's own CLAUDE.md for the full
+ * attribution writeup).
  */
 public final class HandCartRenderer extends EntityRenderer<HandCartEntity, HandCartRenderState> {
 
-    private final ItemModelResolver itemModelResolver;
+    private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/hand_cart.png");
+
+    private final HandCartModel model;
 
     public HandCartRenderer(final EntityRendererProvider.Context context) {
         super(context);
-        this.itemModelResolver = context.getItemModelResolver();
+        this.model = new HandCartModel(context.bakeLayer(com.github.cerealklla.caryvan.client.ModModelLayers.HAND_CART));
+        this.shadowRadius = 0.5F;
     }
 
     @Override
@@ -43,17 +41,21 @@ public final class HandCartRenderer extends EntityRenderer<HandCartEntity, HandC
     @Override
     public void extractRenderState(final HandCartEntity entity, final HandCartRenderState state, final float partialTicks) {
         super.extractRenderState(entity, state, partialTicks);
-        // Built fresh each call, not cached -- a static ItemStack field crashed resource-pack
-        // loading once already in this exact suite (components not bound yet at class-load time,
-        // see LootBagRenderer's own doc) -- cheap enough not to matter.
-        this.itemModelResolver.updateForNonLiving(state.icon, new ItemStack(Items.CHEST), ItemDisplayContext.GROUND, entity);
+        state.yRot = Mth.rotLerp(partialTicks, entity.yRotO, entity.getYRot());
+        state.wheelRotationRight = (float) entity.getWheelRotation(0);
+        state.wheelRotationLeft = (float) entity.getWheelRotation(1);
+        state.hurtTime = entity.getHurtTime() - partialTicks;
+        state.damageTaken = entity.getDamage();
+        state.forwardDirection = entity.getHurtDir();
     }
 
     @Override
     public void submit(final HandCartRenderState state, final PoseStack poseStack, final SubmitNodeCollector submitNodeCollector, final CameraRenderState camera) {
         poseStack.pushPose();
-        poseStack.translate(0.0, 0.3, 0.0);
-        state.icon.submit(poseStack, submitNodeCollector, state.lightCoords, OverlayTexture.NO_OVERLAY, EntityRenderState.NO_OUTLINE);
+        poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - state.yRot));
+        poseStack.scale(-1.0F, -1.0F, 1.0F);
+        this.model.setupAnim(state);
+        submitNodeCollector.submitModel(this.model, state, poseStack, TEXTURE, state.lightCoords, OverlayTexture.NO_OVERLAY, -1, null);
         poseStack.popPose();
         super.submit(state, poseStack, submitNodeCollector, camera);
     }

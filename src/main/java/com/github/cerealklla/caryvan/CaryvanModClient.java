@@ -2,7 +2,9 @@ package com.github.cerealklla.caryvan;
 
 import com.mojang.blaze3d.platform.InputConstants;
 
+import com.github.cerealklla.caryvan.client.ModModelLayers;
 import com.github.cerealklla.caryvan.client.renderer.entity.HandCartRenderer;
+import com.github.cerealklla.caryvan.client.renderer.entity.model.HandCartModel;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 
@@ -40,6 +42,11 @@ public class CaryvanModClient {
     @SubscribeEvent
     static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(TOGGLE_SLOW);
+    }
+
+    @SubscribeEvent
+    static void onRegisterLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
+        event.registerLayerDefinition(ModModelLayers.HAND_CART, HandCartModel::createLayer);
     }
 
     @SubscribeEvent
