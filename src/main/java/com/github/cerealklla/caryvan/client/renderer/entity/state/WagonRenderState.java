@@ -8,8 +8,15 @@ public final class WagonRenderState extends EntityRenderState {
     public float wheelRotationLeft;
     public float wheelRotationRight;
     public String woodType;
-    /** Health system, 2026-10-26: at least one wheel is broken (but HP > 0) -- selects the "wheels damaged" texture variant. */
-    public boolean wheelsDamaged;
-    /** Health system, 2026-10-26: HP == 0 -- selects the full Broken-Wagon texture variant (takes priority over {@link #wheelsDamaged}). */
+    /** Health system, 2026-10-26: HP == 0 -- selects the full Broken-Wagon texture variant and tilts the model (see WagonRenderer#submit). */
     public boolean broken;
+    /**
+     * Real live-test feedback, 2026-10-26: a subtle texture recolor alone ("wheels damaged") read as
+     * "nothing happened" -- these instead hide the corresponding wheel {@code ModelPart}s entirely
+     * (see {@code WagonModel#setupAnim}), a much more legible "this wheel is gone" signal, for each
+     * independently-tracked wheel ({@code CartWheel} index 0 = left, 1 = right -- see {@code
+     * AbstractDamageableDrawnEntity#isWheelBroken(int)}).
+     */
+    public boolean wheelBrokenLeft;
+    public boolean wheelBrokenRight;
 }

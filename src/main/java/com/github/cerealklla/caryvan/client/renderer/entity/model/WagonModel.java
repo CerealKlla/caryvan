@@ -80,6 +80,13 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         this.leftWheelBack.xRot = state.wheelRotationLeft;
         this.rightWheelFront.xRot = state.wheelRotationRight;
         this.rightWheelBack.xRot = state.wheelRotationRight;
+        // Real live-test feedback, 2026-10-26: a texture recolor alone read as "nothing visibly
+        // changed" -- hiding the broken side's wheel geometry entirely is a far more legible signal.
+        // See WagonRenderState#wheelBrokenLeft/Right's own doc.
+        this.leftWheelFront.visible = !state.wheelBrokenLeft;
+        this.leftWheelBack.visible = !state.wheelBrokenLeft;
+        this.rightWheelFront.visible = !state.wheelBrokenRight;
+        this.rightWheelBack.visible = !state.wheelBrokenRight;
     }
 
     // Real user report, 2026-10-25: "lengthen the wagon by about 50%; the wheels are overlaping
@@ -93,7 +100,9 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
 
     // Real user report, 2026-10-25: "The wheels need to be wider bit a little bit, maybe 10%" --
     // the wheel TRACK (how far apart the left/right wheels sit), not the wheels' own thickness.
-    private static final float TRACK_SCALE = 1.1F;
+    // Widened again 2026-10-26, real live-test feedback: "widen the wheel well again, moving them
+    // another 5% apart or so" -- 1.1 -> 1.155.
+    private static final float TRACK_SCALE = 1.155F;
 
     public static LayerDefinition createLayer() {
         final EasyMeshBuilder root = new EasyMeshBuilder("root");

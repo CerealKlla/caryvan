@@ -347,6 +347,48 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         }
     }
 
+    /** Server-tick throttle for {@link #tickStatusIndicator()} -- once per second, not every tick. */
+    private int statusIndicatorCooldownTicks;
+
+    /**
+     * Real live-test gap, 2026-10-26: "No visible indicator of Recently Damaged / Passive Repair
+     * state... there's no way to tell which buff/debuff is active." An actionbar message to every
+     * seated player (reusing the exact {@code sendOverlayMessage} idiom {@link #handleRepairAttempt}
+     * already uses for its own feedback), once per second -- simple and functional, matching this
+     * suite's own "ship the real mechanic first, polish the UI later" precedent for a first pass.
+     */
+    private void tickStatusIndicator() {
+        if (this.statusIndicatorCooldownTicks-- > 0) {
+            return;
+        }
+        this.statusIndicatorCooldownTicks = 20;
+        final net.minecraft.network.chat.Component status = currentStatusMessage();
+        if (status == null) {
+            return;
+        }
+        for (final Entity passenger : this.getPassengers()) {
+            if (passenger instanceof net.minecraft.server.level.ServerPlayer player) {
+                player.sendOverlayMessage(status);
+            }
+        }
+    }
+
+    private net.minecraft.network.chat.Component currentStatusMessage() {
+        if (this.isBroken()) {
+            // Already unmistakable (grey/tilted model, missing wheels) -- no extra text needed.
+            return null;
+        }
+        if (this.isRecentlyDamaged()) {
+            return net.minecraft.network.chat.Component.literal("Cart: Recently Damaged (Repair unavailable)")
+                    .withStyle(net.minecraft.ChatFormatting.RED);
+        }
+        if (this.passiveRepairUntilMillis > System.currentTimeMillis()) {
+            return net.minecraft.network.chat.Component.literal("Cart: Passive Repair active")
+                    .withStyle(net.minecraft.ChatFormatting.GREEN);
+        }
+        return null;
+    }
+
     /**
      * Explicit Repair action -- consumes up to {@code wheelsAvailable} matching Wheels items (the
      * caller already resolved/removed them from cargo), un-breaks that many wheels, and starts a
@@ -497,6 +539,7 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             return;
         }
         tickRepairStateMachine();
+        tickStatusIndicator();
         if (!this.isNoGravity()) {
             this.setDeltaMovement(0.0D, this.getDeltaMovement().y - 0.08D, 0.0D);
         }
@@ -699,8 +742,22 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         builder.define(DATA_BROKEN_WHEEL_MASK, 0);
     }
 
+    /**
+     * Real live-test report, 2026-10-26: the Broken visual did not survive a log-out/log-back-in.
+     * Checked directly against the real decompiled source (not assumed) -- {@code LivingEntity} has
+     * its own substantial, concrete {@code readAdditionalSaveData}/{@code addAdditionalSaveData}
+     * (persists real health, absorption, active effects, equipment, hurt/death timers, etc.), unlike
+     * {@code VehicleEntity}/{@code Entity}, where these are abstract with no body at all -- the
+     * omission of a {@code super} call here was copied verbatim from {@code AbstractDrawnEntity},
+     * which genuinely never needed one. This class's own recompute (the tail of this method) still
+     * overwrites whatever {@code super} sets for health/max-health, so it alone isn't expected to be
+     * the full explanation for the reported symptom -- but skipping LivingEntity's own real
+     * persisted state is a genuine, independent correctness gap regardless (every other
+     * {@code LivingEntity} subclass in the game calls {@code super} here), so it's restored.
+     */
     @Override
     protected void readAdditionalSaveData(final ValueInput input) {
+        super.readAdditionalSaveData(input);
         this.pullingUUID = input.read("PullingUUID", UUIDUtil.CODEC).orElse(null);
         this.entityData.set(DATA_WOOD_TYPE, input.read("WoodType", com.mojang.serialization.Codec.STRING).orElse(WoodType.OAK.name()));
         this.ownerId = input.read("OwnerId", UUIDUtil.CODEC).orElse(null);
@@ -714,6 +771,7 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
 
     @Override
     protected void addAdditionalSaveData(final ValueOutput output) {
+        super.addAdditionalSaveData(output);
         output.storeNullable("PullingUUID", UUIDUtil.CODEC, this.pullingUUID);
         output.store("WoodType", com.mojang.serialization.Codec.STRING, this.entityData.get(DATA_WOOD_TYPE));
         output.storeNullable("OwnerId", UUIDUtil.CODEC, this.ownerId);

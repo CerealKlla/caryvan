@@ -58,14 +58,11 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + ".png")));
 
-    // Health system, 2026-10-26: a second texture per WoodType with just the wheel UV region
-    // desaturated/darkened (see gen_broken_cart_textures.py's own generation doc for the exact
-    // confirmed UV footprint), selected whenever any wheel is broken but HP > 0; and a third, fully
-    // desaturated/darkened variant for the complete Broken-Wagon body swap at 0 HP, same
-    // "desaturate = damaged" convention already established for the Broken Wagon item icon.
-    private static final Map<String, Identifier> WHEELS_DAMAGED_TEXTURES = WoodType.values()
-            .collect(Collectors.toMap(WoodType::name,
-                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + "_wheels_damaged.png")));
+    // Health system, 2026-10-26: a fully desaturated/darkened variant for the complete Broken-Wagon
+    // body swap at 0 HP, same "desaturate = damaged" convention as the Broken Wagon item icon.
+    // (The earlier "wheels damaged" texture-only variant was dropped, 2026-10-26, after real
+    // live-test feedback that a subtle recolor read as "nothing visibly changed" -- a broken wheel
+    // now hides that wheel's own ModelPart entirely instead, see WagonModel#setupAnim.)
     private static final Map<String, Identifier> BROKEN_TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + "_broken.png")));
@@ -92,7 +89,9 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
         state.wheelRotationLeft = (float) entity.getWheelRotation(1);
         state.woodType = entity.getWoodType().name();
         state.broken = entity.isBroken();
-        state.wheelsDamaged = entity.getBrokenWheelCount() > 0;
+        // Index mapping matches the wheelRotation assignment just above (0 -> right, 1 -> left).
+        state.wheelBrokenRight = entity.isWheelBroken(0);
+        state.wheelBrokenLeft = entity.isWheelBroken(1);
         buildLeashRopes(entity, state, partialTicks);
     }
 
@@ -126,13 +125,21 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
         state.leashStates = ropes;
     }
 
+    // Real live-test feedback, 2026-10-26: at 0 HP "the wagon stays upright" and reads as
+    // underwhelming -- a visible list/tilt to one side, on top of the full grey texture and the
+    // now-missing wheel geometry, reads much more clearly as "broken down," not just "repainted."
+    private static final float BROKEN_TILT_DEGREES = 12.0F;
+
     @Override
     public void submit(final WagonRenderState state, final PoseStack poseStack, final SubmitNodeCollector submitNodeCollector, final CameraRenderState camera) {
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - state.yRot));
         poseStack.scale(-1.0F, -1.0F, 1.0F);
+        if (state.broken) {
+            poseStack.mulPose(Axis.ZP.rotationDegrees(BROKEN_TILT_DEGREES));
+        }
         this.model.setupAnim(state);
-        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : state.wheelsDamaged ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
+        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : TEXTURES;
         final Identifier texture = textureSet.getOrDefault(state.woodType, textureSet.get(WoodType.OAK.name()));
         final RenderType renderType = this.model.renderType(texture);
         submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,

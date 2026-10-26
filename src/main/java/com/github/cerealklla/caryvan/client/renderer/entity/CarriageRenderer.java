@@ -39,10 +39,7 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
     private static final Map<String, Identifier> TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + ".png")));
-    /** Health system, 2026-10-26 -- mirrors {@code WagonRenderer}'s own doc exactly. */
-    private static final Map<String, Identifier> WHEELS_DAMAGED_TEXTURES = WoodType.values()
-            .collect(Collectors.toMap(WoodType::name,
-                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + "_wheels_damaged.png")));
+    /** Health system, 2026-10-26 -- mirrors {@code WagonRenderer}'s own doc exactly (the "wheels damaged" texture variant was dropped the same day in favor of hiding wheel geometry). */
     private static final Map<String, Identifier> BROKEN_TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + "_broken.png")));
@@ -69,7 +66,8 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         state.wheelRotationLeft = (float) entity.getWheelRotation(1);
         state.woodType = entity.getWoodType().name();
         state.broken = entity.isBroken();
-        state.wheelsDamaged = entity.getBrokenWheelCount() > 0;
+        state.wheelBrokenRight = entity.isWheelBroken(0);
+        state.wheelBrokenLeft = entity.isWheelBroken(1);
         buildLeashRopes(entity, state, partialTicks);
     }
 
@@ -102,13 +100,19 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         state.leashStates = ropes;
     }
 
+    /** Mirrors {@code WagonRenderer}'s own doc exactly. */
+    private static final float BROKEN_TILT_DEGREES = 12.0F;
+
     @Override
     public void submit(final CarriageRenderState state, final PoseStack poseStack, final SubmitNodeCollector submitNodeCollector, final CameraRenderState camera) {
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - state.yRot));
         poseStack.scale(-1.0F, -1.0F, 1.0F);
+        if (state.broken) {
+            poseStack.mulPose(Axis.ZP.rotationDegrees(BROKEN_TILT_DEGREES));
+        }
         this.model.setupAnim(state);
-        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : state.wheelsDamaged ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
+        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : TEXTURES;
         final Identifier texture = textureSet.getOrDefault(state.woodType, textureSet.get(WoodType.OAK.name()));
         final RenderType renderType = this.model.renderType(texture);
         submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,

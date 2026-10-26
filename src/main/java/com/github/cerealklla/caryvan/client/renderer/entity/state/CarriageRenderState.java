@@ -8,8 +8,9 @@ public final class CarriageRenderState extends EntityRenderState {
     public float wheelRotationLeft;
     public float wheelRotationRight;
     public String woodType;
-    /** Health system, 2026-10-26: mirrors {@code WagonRenderState#wheelsDamaged}. */
-    public boolean wheelsDamaged;
     /** Health system, 2026-10-26: mirrors {@code WagonRenderState#broken}. */
     public boolean broken;
+    /** Health system, 2026-10-26: mirrors {@code WagonRenderState#wheelBrokenLeft}/{@code #wheelBrokenRight}. */
+    public boolean wheelBrokenLeft;
+    public boolean wheelBrokenRight;
 }

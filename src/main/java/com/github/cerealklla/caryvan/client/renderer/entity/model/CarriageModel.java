@@ -32,6 +32,11 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     // started out as before live-test correction.
     private static final float LENGTH_SCALE = 2.2F;
     private static final float TRACK_SCALE = 1.3F;
+    // Real live-test feedback, 2026-10-26: "widen the wheel well again, moving them another 5%
+    // apart or so" -- a wheel-only multiplier on top of TRACK_SCALE, since TRACK_SCALE itself is
+    // deliberately shared with the body's own X-axis dimensions here (see this class's own doc) --
+    // widening it directly would also widen the body, which wasn't asked for.
+    private static final float WHEEL_TRACK_EXTRA_SCALE = 1.05F;
 
     private final ModelPart leftWheelFront;
     private final ModelPart rightWheelFront;
@@ -53,12 +58,16 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         this.leftWheelBack.xRot = state.wheelRotationLeft;
         this.rightWheelFront.xRot = state.wheelRotationRight;
         this.rightWheelBack.xRot = state.wheelRotationRight;
+        this.leftWheelFront.visible = !state.wheelBrokenLeft;
+        this.leftWheelBack.visible = !state.wheelBrokenLeft;
+        this.rightWheelFront.visible = !state.wheelBrokenRight;
+        this.rightWheelBack.visible = !state.wheelBrokenRight;
     }
 
     public static LayerDefinition createLayer() {
         final EasyMeshBuilder root = new EasyMeshBuilder("root");
 
-        final float xOffset = 14.0F * TRACK_SCALE;
+        final float xOffset = 14.0F * TRACK_SCALE * WHEEL_TRACK_EXTRA_SCALE;
         final float frontZ = -10.0F * LENGTH_SCALE;
         final float backZ = 10.0F * LENGTH_SCALE;
 
