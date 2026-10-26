@@ -58,19 +58,18 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + ".png")));
 
-    // Health system, 2026-10-26: a fully desaturated/darkened variant for the complete Broken-Wagon
-    // body swap at 0 HP, same "desaturate = damaged" convention as the Broken Wagon item icon.
-    private static final Map<String, Identifier> BROKEN_TEXTURES = WoodType.values()
-            .collect(Collectors.toMap(WoodType::name,
-                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + "_broken.png")));
-
     // Design reversal, same day: a broken wheel no longer hides its own ModelPart (see
     // WagonModel#setupAnim's own doc) -- "I would like to see a visibly broken wheel still attached"
     // instead, reusing the real per-wood "wheels damaged" texture art already built for the earlier
     // Wheels/Broken-item icon rework (the same desaturated/cracked visual language, just applied as
     // a whole-body entity texture variant instead of an item icon). Used whenever at least one wheel
-    // is broken but the cart as a whole isn't yet fully Broken (0 HP, all 4 wheels broken) -- that
-    // dramatic full-wreck state is reserved for BROKEN_TEXTURES alone.
+    // is broken, including while fully Broken -- real live-test feedback, 2026-10-26, on top of the
+    // full tilt/detached-wheel/debris geometry work: "stop making it turn grey, that looks
+    // confusing." The desaturated/fully-grey BROKEN_TEXTURES tier that used to apply at 0 HP is gone
+    // outright -- the tilt + detached wheels + ground debris alone communicate "broken" now, with no
+    // color change at all; this per-wood "wheels damaged" texture (real art, not a plain recolor) is
+    // the only non-default texture tier left, applied the same way regardless of whether 1-3 wheels
+    // or all 4 are broken.
     private static final Map<String, Identifier> WHEELS_DAMAGED_TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + "_wheels_damaged.png")));
@@ -133,8 +132,10 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
     }
 
     // Real live-test feedback, 2026-10-26: at 0 HP "the wagon stays upright" and reads as
-    // underwhelming -- a visible list/tilt to one side, on top of the full grey texture and the
-    // now-missing wheel geometry, reads much more clearly as "broken down," not just "repainted."
+    // underwhelming -- a visible list/tilt to one side reads much more clearly as "broken down."
+    // The tilt was later paired with real detached-wheel/ground-debris geometry (see WagonModel's
+    // own doc) instead of a grey texture swap, per a follow-up correction -- see
+    // WHEELS_DAMAGED_TEXTURES's own doc for that reversal.
     // Real live-test fix, 2026-10-26: now the single source of truth lives on WagonModel itself
     // (public there), since its own setupAnim needs the identical value for real positional-
     // compensation math (see that class's own doc) -- referenced from here instead of duplicated,
@@ -150,7 +151,7 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
             poseStack.mulPose(Axis.ZP.rotationDegrees(BROKEN_TILT_DEGREES));
         }
         this.model.setupAnim(state);
-        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : anyWheelBroken(state) ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
+        final Map<String, Identifier> textureSet = anyWheelBroken(state) ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
         final Identifier texture = textureSet.getOrDefault(state.woodType, textureSet.get(WoodType.OAK.name()));
         final RenderType renderType = this.model.renderType(texture);
         submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,
