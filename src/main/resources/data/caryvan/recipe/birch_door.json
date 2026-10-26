@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:birch_planks",
+    "minecraft:birch_planks",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "caryvan:birch_door"
+  }
+}

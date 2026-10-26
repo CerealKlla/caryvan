@@ -158,6 +158,13 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
      * ({@code Math.min(wheelsAvailable, brokenWheelCount)}, confirmed by re-reading it directly, not
      * an all-or-nothing gate anywhere). This scans the cart's own cargo instead, consuming across
      * however many stacks it takes.
+     *
+     * <p>Real spec, 2026-10-26 (Carriage redesign Phase 3): "The existing Repair button must also
+     * consume Door items from cargo when present, alongside its existing Wheel-consumption logic."
+     * {@link #repairAdditionalParts(Player)} is a hook for exactly this -- a no-op here, overridden
+     * by {@link CarriageEntity} to scan/consume its own Door items the same way this method already
+     * scans Wheels, entirely independent of whether any wheels needed fixing this click (a cart with
+     * broken doors but no broken wheels must still get its doors fixed).
      */
     public void handleRepairFromCargo(final Player player) {
         if (this.isRecentlyDamaged()) {
@@ -165,38 +172,52 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
                     "This cart was recently damaged and can't be repaired yet."));
             return;
         }
-        if (this.getBrokenWheelCount() <= 0) {
-            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
-                    "This cart's wheels are already in good repair."));
-            return;
-        }
-        final net.minecraft.world.item.Item wheelsItem = com.github.cerealklla.caryvan.registration.ModItems.wheelsFor(this.getWoodType());
-        int available = 0;
-        for (int i = 0; i < this.getContainerSize(); i++) {
-            final ItemStack stack = this.getItem(i);
-            if (stack.getItem() == wheelsItem) {
-                available += stack.getCount();
-            }
-        }
-        if (available <= 0) {
-            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
-                    "No matching Wheels found in this cart's cargo."));
-            return;
-        }
-        final int fixed = this.repair(available);
-        if (fixed > 0) {
-            int remaining = fixed;
-            for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+        boolean repairedAnything = false;
+        if (this.getBrokenWheelCount() > 0) {
+            final net.minecraft.world.item.Item wheelsItem = com.github.cerealklla.caryvan.registration.ModItems.wheelsFor(this.getWoodType());
+            int available = 0;
+            for (int i = 0; i < this.getContainerSize(); i++) {
                 final ItemStack stack = this.getItem(i);
                 if (stack.getItem() == wheelsItem) {
-                    final int take = Math.min(remaining, stack.getCount());
-                    stack.shrink(take);
-                    remaining -= take;
+                    available += stack.getCount();
                 }
             }
-            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
-                    "Repaired " + fixed + " wheel" + (fixed == 1 ? "" : "s") + "."));
+            if (available > 0) {
+                final int fixed = this.repair(available);
+                if (fixed > 0) {
+                    repairedAnything = true;
+                    int remaining = fixed;
+                    for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+                        final ItemStack stack = this.getItem(i);
+                        if (stack.getItem() == wheelsItem) {
+                            final int take = Math.min(remaining, stack.getCount());
+                            stack.shrink(take);
+                            remaining -= take;
+                        }
+                    }
+                    player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                            "Repaired " + fixed + " wheel" + (fixed == 1 ? "" : "s") + "."));
+                }
+            }
         }
+        if (repairAdditionalParts(player)) {
+            repairedAnything = true;
+        }
+        if (!repairedAnything) {
+            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                    "Nothing to repair, or no matching parts found in this cart's cargo."));
+        }
+    }
+
+    /**
+     * Hook for a concrete subclass to repair its own additional, non-wheel parts from cargo as part
+     * of the same Repair click -- no-op by default (returns false, meaning "nothing repaired").
+     * See {@link CarriageEntity#repairAdditionalParts(Player)} for the real Door-item implementation.
+     *
+     * @return whether anything was actually repaired (so the caller knows whether to fall back to a "nothing to repair" message).
+     */
+    protected boolean repairAdditionalParts(final Player player) {
+        return false;
     }
 
     /**

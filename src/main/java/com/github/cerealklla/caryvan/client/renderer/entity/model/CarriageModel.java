@@ -92,6 +92,13 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     private static final float FALLEN_WORLD_ZROT_DEGREES = 55.0F;
     private static final float FALLEN_LOCAL_ZROT = (float) (Math.toRadians(FALLEN_WORLD_ZROT_DEGREES) - Math.toRadians(BROKEN_TILT_DEGREES));
 
+    // Carriage redesign Phase 3, 2026-10-26: "a damaged door should visually hang off its hinges,
+    // real geometry change, same spirit as the broken-wheel geometry work -- don't just recolor."
+    // Swung open (yRot) and sagging (zRot) around the door's own BACK edge (treated as the hinge) --
+    // untested placeholder angles, like every other geometry constant in this file.
+    private static final float DOOR_SWING_DEGREES = 35.0F;
+    private static final float DOOR_DROOP_DEGREES = 12.0F;
+
     private final ModelPart leftWheelFrontNormal;
     private final ModelPart leftWheelFrontBroken;
     private final ModelPart rightWheelFrontNormal;
@@ -102,6 +109,10 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     private final ModelPart rightWheelBackBroken;
     private final ModelPart fallenWheelFront;
     private final ModelPart fallenWheelBack;
+    private final ModelPart wallDoorLeft;
+    private final ModelPart wallDoorLeftBroken;
+    private final ModelPart wallDoorRight;
+    private final ModelPart wallDoorRightBroken;
 
     public CarriageModel(final ModelPart root) {
         super(root, RenderTypes::entityCutout);
@@ -116,6 +127,10 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         this.rightWheelBackBroken = parts.getChild("rightWheelBackBroken");
         this.fallenWheelFront = parts.getChild("fallenWheelFront");
         this.fallenWheelBack = parts.getChild("fallenWheelBack");
+        this.wallDoorLeft = parts.getChild("wallDoorLeft");
+        this.wallDoorLeftBroken = parts.getChild("wallDoorLeftBroken");
+        this.wallDoorRight = parts.getChild("wallDoorRight");
+        this.wallDoorRightBroken = parts.getChild("wallDoorRightBroken");
     }
 
     /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly. */
@@ -126,6 +141,13 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         applyWheelPair(this.rightWheelFrontNormal, this.rightWheelFrontBroken, state.wheelRotation[1], state.wheelBroken[1], fullyBroken, true, -WHEEL_TRACK_X);
         applyWheelPair(this.leftWheelBackNormal, this.leftWheelBackBroken, state.wheelRotation[2], state.wheelBroken[2], fullyBroken, false, WHEEL_TRACK_X);
         applyWheelPair(this.rightWheelBackNormal, this.rightWheelBackBroken, state.wheelRotation[3], state.wheelBroken[3], fullyBroken, true, -WHEEL_TRACK_X);
+
+        // Carriage redesign Phase 3 -- entirely independent of the wheel/fully-broken state above;
+        // a door can be hanging off its hinges on a perfectly drivable carriage.
+        this.wallDoorLeft.visible = !state.doorBroken[0];
+        this.wallDoorLeftBroken.visible = state.doorBroken[0];
+        this.wallDoorRight.visible = !state.doorBroken[1];
+        this.wallDoorRightBroken.visible = state.doorBroken[1];
 
         this.fallenWheelFront.visible = fullyBroken;
         this.fallenWheelBack.visible = fullyBroken;
@@ -248,6 +270,14 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         final EasyMeshBuilder wallDoorLeft = wallSegment("wallDoorLeft", -sideX, WALL_Y_BOTTOM, WALL_HEIGHT, doorFrontZ, doorBackZ);
         final EasyMeshBuilder wallDoorRight = wallSegment("wallDoorRight", sideX, WALL_Y_BOTTOM, WALL_HEIGHT, doorFrontZ, doorBackZ);
 
+        // Real "hang off its hinges" damaged-door geometry, 2026-10-26 (Carriage redesign Phase 3) --
+        // the hinge is the door's own BACK edge (doorBackZ, away from the driver's bench); the panel
+        // swings open away from the body and sags, a genuine geometry change, not a recolor. Only
+        // one of a door's two baked variants is ever shown at a time, same per-part toggle pattern
+        // the broken-wheel work already established.
+        final EasyMeshBuilder wallDoorLeftBroken = brokenDoorPanel("wallDoorLeftBroken", -sideX, WALL_Y_BOTTOM, WALL_HEIGHT, doorBackZ, doorLength);
+        final EasyMeshBuilder wallDoorRightBroken = brokenDoorPanel("wallDoorRightBroken", sideX, WALL_Y_BOTTOM, WALL_HEIGHT, doorBackZ, doorLength);
+
         final float skirtHeight = 5.0F;
         final float windowHeight = 2.0F;
         final float headerHeight = WALL_HEIGHT - skirtHeight - windowHeight;
@@ -308,6 +338,8 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         body.addChild(sideBack);
         body.addChild(wallDoorLeft);
         body.addChild(wallDoorRight);
+        body.addChild(wallDoorLeftBroken);
+        body.addChild(wallDoorRightBroken);
         body.addChild(wallSkirtLeft);
         body.addChild(wallSkirtRight);
         body.addChild(wallHeaderLeft);
@@ -343,6 +375,24 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         wall.setRotationPoint(x, yBottom, zCenter);
         wall.yRot = x < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
         return wall;
+    }
+
+    /**
+     * The damaged-door variant -- same panel shape {@link #wallSegment} builds, but pivoted at one
+     * real edge ({@code hingeZ}, the door's own back edge) instead of its center, with an additional
+     * swing (yRot) and droop (zRot) layered on top of the same base alignment rotation -- reads as
+     * the door hanging open off that edge. Carriage redesign Phase 3, 2026-10-26.
+     */
+    private static EasyMeshBuilder brokenDoorPanel(final String name, final float x, final float yBottom, final float height, final float hingeZ, final float length) {
+        final EasyMeshBuilder door = new EasyMeshBuilder(name, 0, 31);
+        // Spans from the hinge (local X=0, pre-alignment) back toward the door's own front edge.
+        door.addBox(-length, 0.0F, -0.5F, length, height, 1);
+        door.setRotationPoint(x, yBottom, hingeZ);
+        final float baseYRot = x < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
+        final float swingRad = (float) Math.toRadians(DOOR_SWING_DEGREES);
+        door.yRot = baseYRot + (x < 0.0F ? -swingRad : swingRad);
+        door.zRot = (float) Math.toRadians(DOOR_DROOP_DEGREES);
+        return door;
     }
 
     /** Mirrors {@code WagonModel#wheel}'s own doc exactly -- same real 8-spoke hub/rim pattern, same damaged-look variant. */

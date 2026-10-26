@@ -68,6 +68,9 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         }
         state.woodType = entity.getWoodType().name();
         state.broken = entity.isBroken();
+        for (int i = 0; i < state.doorBroken.length; i++) {
+            state.doorBroken[i] = entity.isDoorBroken(i);
+        }
         buildLeashRopes(entity, state, partialTicks);
     }
 

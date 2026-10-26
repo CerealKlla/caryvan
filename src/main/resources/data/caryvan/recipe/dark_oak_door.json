@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:dark_oak_planks",
+    "minecraft:dark_oak_planks",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "caryvan:dark_oak_door"
+  }
+}

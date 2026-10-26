@@ -47,6 +47,12 @@ public final class ModItems {
     // and the wheels in conjunction with other stuff crafted the actual carts/wagons"). Plain Item,
     // no custom class needed -- it's a pure crafting material, never placed/used directly.
     private static final Map<WoodType, DeferredItem<Item>> WHEELS = new HashMap<>();
+    // Door: Carriage redesign Phase 3, 2026-10-26 -- real user spec, "mirror exactly how Wheels
+    // items/recipes/advancements were built... same pattern, different part." A Carriage-only repair
+    // material (the Wagon has no doors) consumed by Repair to fix a damaged door, same shape as
+    // Wheels fixing a damaged wheel; see AbstractDamageableDrawnInventoryEntity#handleRepairFromCargo's
+    // own doc for the shared cargo-scanning mechanism both now go through.
+    private static final Map<WoodType, DeferredItem<Item>> DOORS = new HashMap<>();
 
     static {
         WoodType.values().forEach(woodType -> {
@@ -72,6 +78,10 @@ public final class ModItems {
                             .setId(ResourceKey.create(Registries.ITEM, id)), woodType)));
             WHEELS.put(woodType, ITEMS.register(
                     woodType.name() + "_wheels",
+                    id -> new Item(new Item.Properties()
+                            .setId(ResourceKey.create(Registries.ITEM, id)))));
+            DOORS.put(woodType, ITEMS.register(
+                    woodType.name() + "_door",
                     id -> new Item(new Item.Properties()
                             .setId(ResourceKey.create(Registries.ITEM, id)))));
         });
@@ -112,5 +122,9 @@ public final class ModItems {
 
     public static Item wheelsFor(final WoodType woodType) {
         return WHEELS.get(woodType).get();
+    }
+
+    public static Item doorFor(final WoodType woodType) {
+        return DOORS.get(woodType).get();
     }
 }

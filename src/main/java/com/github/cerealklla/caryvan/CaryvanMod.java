@@ -79,7 +79,9 @@ public class CaryvanMod {
                             // Wheel-rework testing items, 2026-10-26.
                             new ItemStack(ModItems.wheelsFor(net.minecraft.world.level.block.state.properties.WoodType.OAK), 8),
                             new ItemStack(ModItems.BROKEN_WAGON.get()),
-                            new ItemStack(ModItems.BROKEN_WHEEL.get(), 8)));
+                            new ItemStack(ModItems.BROKEN_WHEEL.get(), 8),
+                            // Carriage redesign Phase 3 testing item, same day.
+                            new ItemStack(ModItems.doorFor(net.minecraft.world.level.block.state.properties.WoodType.OAK), 4)));
         }
     }
 

@@ -342,7 +342,15 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             this.brokenWheelCount = healthImplied;
             applyBrokenWheelCount();
         }
+        // Carriage redesign Phase 3, 2026-10-26 -- hook for a concrete subclass to ratchet its own
+        // additional, non-wheel broken-part state (Doors) the same way, off the same real hit. No-op
+        // by default; see CarriageEntity#onDamageTaken's own doc.
+        onDamageTaken();
         this.gameEvent(net.minecraft.world.level.gameevent.GameEvent.ENTITY_DAMAGE);
+    }
+
+    /** Hook for a concrete subclass to react to a real hit landing -- no-op by default. Called after {@link #brokenWheelCount}'s own ratchet, from within {@link #actuallyHurt}. */
+    protected void onDamageTaken() {
     }
 
     /** Syncs {@link #brokenWheelCount} onto the real {@link CartWheel} objects (renderer reads this per-wheel) and the synced bitmask (client-visible). */
@@ -370,13 +378,24 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * for Repair to actually change).
      */
     private int computeBrokenWheelCount() {
-        final int wheelCount = this.wheels.size();
+        return computeBrokenCountForSlots(this.wheels.size());
+    }
+
+    /**
+     * Generic version of {@link #computeBrokenWheelCount()}'s own real formula -- "what current
+     * health alone implies the broken count should be," for an arbitrary number of equally-weighted
+     * slots, not just this class's own wheels. Carriage redesign Phase 3, 2026-10-26: exposed so
+     * {@link CarriageEntity} can reuse the exact same threshold-crossing shape for its own 2 Doors
+     * (real user spec: "reuse the wheel threshold logic's shape") without inventing a second,
+     * differently-behaved formula.
+     */
+    protected int computeBrokenCountForSlots(final int slotCount) {
         final float base = this.getBaseMaxHealth();
-        if (wheelCount <= 0 || base <= 0.0F) {
+        if (slotCount <= 0 || base <= 0.0F) {
             return 0;
         }
         final float fractionDamaged = Mth.clamp(1.0F - this.getHealth() / base, 0.0F, 1.0F);
-        return Math.min(wheelCount, (int) Math.floor(fractionDamaged * wheelCount + 1.0e-4F));
+        return Math.min(slotCount, (int) Math.floor(fractionDamaged * slotCount + 1.0e-4F));
     }
 
     /**

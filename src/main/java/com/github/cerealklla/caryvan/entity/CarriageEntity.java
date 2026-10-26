@@ -10,6 +10,9 @@ import com.github.cerealklla.caryvan.registration.ModAttachments;
 import com.github.cerealklla.caryvan.registration.ModItems;
 import com.github.cerealklla.caryvan.registration.ModMenus;
 
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -30,6 +33,8 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -82,6 +87,19 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
     // "2-4 is a sensible placeholder."
     private static final int INTERIOR_SEAT_COUNT = 4;
     private final Entity[] interiorSeatOccupants = new Entity[INTERIOR_SEAT_COUNT];
+
+    // Carriage redesign Phase 3, 2026-10-26: "Doors have their own independent health/repair
+    // system, entirely separate from the Carriage's own HP pool" -- not an attribute, not tied to
+    // Temp Max HP at all, just a simple broken/intact flag per door (0=left, 1=right), driven by the
+    // SAME damage-crossing-a-threshold shape wheels already use (AbstractDamageableDrawnEntity#
+    // computeBrokenCountForSlots, reused generically rather than inventing a second formula), ratcheted
+    // up only by #onDamageTaken and lowered only by an explicit Repair consuming a Door item (see
+    // #repairAdditionalParts) -- same "ratchet, not pure derivation" shape #brokenWheelCount itself
+    // settled on, for the identical reason (Repair must be able to lower it with zero HP involved).
+    private static final int DOOR_COUNT = 2;
+    private static final EntityDataAccessor<Integer> DATA_BROKEN_DOOR_MASK =
+            SynchedEntityData.defineId(CarriageEntity.class, EntityDataSerializers.INT);
+    private int brokenDoorCount;
 
     private static final double STEER_SPEED_FALLBACK = 0.2D;
     private static final double TEAM_FOLLOW_SPACING = 3.0D;
@@ -779,5 +797,98 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
             }
         }
         return null;
+    }
+
+    // --- Door health/repair, Carriage redesign Phase 3 -------------------------------------------
+
+    @Override
+    protected void defineSynchedData(final SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_BROKEN_DOOR_MASK, 0);
+    }
+
+    /** Ratchets {@link #brokenDoorCount} UP (never down) to whatever current health alone implies for {@link #DOOR_COUNT} equally-weighted slots -- mirrors {@code AbstractDamageableDrawnEntity}'s own wheel ratchet exactly, reusing its generic formula. */
+    @Override
+    protected void onDamageTaken() {
+        final int healthImplied = this.computeBrokenCountForSlots(DOOR_COUNT);
+        if (healthImplied > this.brokenDoorCount) {
+            this.brokenDoorCount = healthImplied;
+            applyBrokenDoorCount();
+        }
+    }
+
+    private void applyBrokenDoorCount() {
+        int mask = 0;
+        for (int i = 0; i < DOOR_COUNT; i++) {
+            if (i < this.brokenDoorCount) {
+                mask |= 1 << i;
+            }
+        }
+        this.entityData.set(DATA_BROKEN_DOOR_MASK, mask);
+    }
+
+    /** 0 = left door, 1 = right door -- read by {@code CarriageRenderer#extractRenderState} to pick the hang-off-hinges geometry variant. */
+    public boolean isDoorBroken(final int doorIndex) {
+        return (this.entityData.get(DATA_BROKEN_DOOR_MASK) & (1 << doorIndex)) != 0;
+    }
+
+    public int getBrokenDoorCount() {
+        return this.brokenDoorCount;
+    }
+
+    /**
+     * Real spec, 2026-10-26: "The existing Repair button must also consume Door items from cargo
+     * when present, alongside its existing Wheel-consumption logic, fixing damaged doors the same
+     * way it fixes wheels (no instant heal involved here either -- doors don't affect HP at all,
+     * this is purely a separate visual/functional repair state)." Unlike wheels, there's no Temp Max
+     * HP ceiling to raise and no instant-heal-adjacent math at all -- doors never touch health in
+     * any way, so this is just a direct decrement, consuming exactly as many Door items as doors
+     * actually get fixed.
+     */
+    @Override
+    protected boolean repairAdditionalParts(final Player player) {
+        if (this.brokenDoorCount <= 0) {
+            return false;
+        }
+        final Item doorItem = ModItems.doorFor(this.getWoodType());
+        int available = 0;
+        for (int i = 0; i < this.getContainerSize(); i++) {
+            final ItemStack stack = this.getItem(i);
+            if (stack.getItem() == doorItem) {
+                available += stack.getCount();
+            }
+        }
+        if (available <= 0) {
+            return false;
+        }
+        final int toFix = Math.min(available, this.brokenDoorCount);
+        this.brokenDoorCount -= toFix;
+        applyBrokenDoorCount();
+        int remaining = toFix;
+        for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+            final ItemStack stack = this.getItem(i);
+            if (stack.getItem() == doorItem) {
+                final int take = Math.min(remaining, stack.getCount());
+                stack.shrink(take);
+                remaining -= take;
+            }
+        }
+        player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                "Repaired " + toFix + " door" + (toFix == 1 ? "" : "s") + "."));
+        return true;
+    }
+
+    /** {@link #brokenDoorCount} is authoritative state (not purely derived from health, same reasoning as {@code AbstractDamageableDrawnEntity#brokenWheelCount}), so it needs its own real NBT round-trip. */
+    @Override
+    protected void readAdditionalSaveData(final ValueInput input) {
+        super.readAdditionalSaveData(input);
+        this.brokenDoorCount = input.getIntOr("BrokenDoorCount", 0);
+        applyBrokenDoorCount();
+    }
+
+    @Override
+    protected void addAdditionalSaveData(final ValueOutput output) {
+        super.addAdditionalSaveData(output);
+        output.putInt("BrokenDoorCount", this.brokenDoorCount);
     }
 }

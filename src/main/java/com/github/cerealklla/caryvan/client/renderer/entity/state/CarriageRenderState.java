@@ -12,4 +12,6 @@ public final class CarriageRenderState extends EntityRenderState {
     public boolean broken;
     /** Health system, 2026-10-26: mirrors {@code WagonRenderState#wheelBroken}. */
     public final boolean[] wheelBroken = new boolean[4];
+    /** Carriage redesign Phase 3, 2026-10-26: 0 = left door, 1 = right door -- entirely separate from {@link #wheelBroken}/{@link #broken} (doors don't affect the cart's own HP at all). */
+    public final boolean[] doorBroken = new boolean[2];
 }
