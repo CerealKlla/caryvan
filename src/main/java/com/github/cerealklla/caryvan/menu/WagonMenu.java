@@ -112,6 +112,11 @@ public final class WagonMenu extends AbstractContainerMenu {
             } else {
                 slot.setChanged();
             }
+            // Real user report, 2026-10-26: shift-clicking a Summon Stone/Companion item out never
+            // triggered MountSlot/CompanionSlot's own #onTake clean-despawn fix at all -- this
+            // hand-written quickMoveStack (unlike vanilla's own generic chest-menu implementations)
+            // never called it. Harmless no-op for a plain cargo Slot.
+            slot.onTake(player, clicked);
         }
         return clicked;
     }

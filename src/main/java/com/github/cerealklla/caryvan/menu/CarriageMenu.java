@@ -107,6 +107,8 @@ public final class CarriageMenu extends AbstractContainerMenu {
             } else {
                 slot.setChanged();
             }
+            // Same fix as WagonMenu's own quickMoveStack -- see that class's own doc.
+            slot.onTake(player, clicked);
         }
         return clicked;
     }

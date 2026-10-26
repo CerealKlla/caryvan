@@ -623,7 +623,7 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
         // seat regardless of where they clicked. Now the click's own X position (relative to this
         // cart's current facing) picks a side directly -- if that side is already taken but the
         // other one isn't, falls back to the free one instead of refusing outright.
-        if (!player.isShiftKeyDown() && this.getPassengers().size() < 2
+        if (!player.isShiftKeyDown() && this.realPlayerPassengerCount() < 2
                 && location.y - this.getY() > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
             // Real user report, 2026-10-26: a precise repro (first click after a world load lands
             // right, every click after that lands left, regardless of which half was actually
@@ -765,7 +765,22 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
         if (passenger == this.companionLeft || passenger == this.companionRight) {
             return true;
         }
-        return this.getPassengers().stream().filter(p -> p != this.companionLeft && p != this.companionRight).count() < 2;
+        return this.realPlayerPassengerCount() < 2;
+    }
+
+    /**
+     * Real live-test bug, 2026-10-26: "I can't right click or shift right click to mount the wagon
+     * anymore, it only opens inventory no matter where I click." Root cause -- once a Companion slot's
+     * occupant became a real passenger (this session's own earlier fix, see {@link
+     * #tickCompanionSlots}'s own doc), {@link #interact}'s own bench-click gate still read the RAW
+     * {@code getPassengers().size() < 2}, which now counts a riding companion as if it were taking up
+     * one of the two player seats -- with both Companion slots filled, that gate was permanently
+     * false for every player, regardless of click position. {@link #canAddPassenger} already excluded
+     * companions correctly; {@link #interact}'s own gate just never got the same treatment when
+     * Companions were added. This is the one shared count both should actually use.
+     */
+    private long realPlayerPassengerCount() {
+        return this.getPassengers().stream().filter(p -> p != this.companionLeft && p != this.companionRight).count();
     }
 
     /**

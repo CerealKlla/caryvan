@@ -361,7 +361,7 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
     /** Same shape as {@code WagonEntity#interact} -- only the front bench is directly player-clickable; the 4 interior seats are Companion-slot-only (see this class's own doc). */
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
-        if (!player.isShiftKeyDown() && this.getPassengers().size() < 2
+        if (!player.isShiftKeyDown() && this.realPlayerPassengerCount() < 2
                 && location.y - this.getY() > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
             final boolean alreadyRiding = this.hasPassenger(player);
             final boolean wantsLeft = this.isLeftSideClick(player);
@@ -444,7 +444,12 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
                 return true;
             }
         }
-        return this.getPassengers().stream().filter(p -> companionSeatIndexOf(p) < 0).count() < 2;
+        return this.realPlayerPassengerCount() < 2;
+    }
+
+    /** Same bug/fix as {@code WagonEntity#realPlayerPassengerCount} -- see that method's own doc. */
+    private long realPlayerPassengerCount() {
+        return this.getPassengers().stream().filter(p -> companionSeatIndexOf(p) < 0).count();
     }
 
     /** Same shape as {@code WagonEntity#tickSteering}. */

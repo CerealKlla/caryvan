@@ -52,4 +52,14 @@ public final class LyfeSummoningBridge {
     public static java.util.Optional<UUID> getSummonedAllayId(ItemStack stack) {
         return com.github.cerealklla.lyfe.api.Lyfe.getSummonedAllayId(stack);
     }
+
+    /** Properly despawns {@code stack}'s currently-summoned mount (recapture + clear, no cooldown) -- see {@code menu.MountSlot#onTake}'s own doc for the real bug this fixes. */
+    public static void despawnMountCleanly(ServerLevel level, ItemStack stack) {
+        com.github.cerealklla.lyfe.api.Lyfe.despawnMountCleanly(level, stack);
+    }
+
+    /** Mirror-image of {@link #despawnMountCleanly}, for a Companion slot's bound Allay instead. */
+    public static void despawnCompanionCleanly(ServerLevel level, ItemStack stack) {
+        com.github.cerealklla.lyfe.api.Lyfe.despawnCompanionCleanly(level, stack);
+    }
 }
