@@ -208,8 +208,10 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
     // the wheel TRACK (how far apart the left/right wheels sit), not the wheels' own thickness.
     // Widened again 2026-10-26, real live-test feedback: "widen the wheel well again, moving them
     // another 5% apart or so" -- 1.1 -> 1.155. Widened a third time same day: "widen another 10%
-    // across the width" -- 1.155 * 1.10 = 1.2705.
-    private static final float TRACK_SCALE = 1.2705F;
+    // across the width" -- 1.155 * 1.10 = 1.2705. Widened a fourth and final time same day --
+    // "let's make it 5% more, and that should be it," explicitly the last adjustment expected --
+    // 1.2705 * 1.05 = 1.334025.
+    private static final float TRACK_SCALE = 1.334025F;
 
     private static final float WHEEL_TRACK_X = 14.0F * TRACK_SCALE;
     private static final float WHEEL_FRONT_Z = -10.0F * LENGTH_SCALE;

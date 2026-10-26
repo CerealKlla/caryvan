@@ -626,8 +626,15 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         return !stack.isEmpty() && LyfeSummoningBridge.isLoaded() && !LyfeSummoningBridge.isOnCooldown(stack, System.currentTimeMillis());
     }
 
+    /** Mirrors {@code WagonEntity}'s own doc exactly -- {@link #LEAD_SLOT}/{@link #TEAM_SLOT} (real Summoning Stones) were never resolved here before, leaving them with zero slot-click destroy-roll protection regardless of click type. */
     @Override
     protected Entity getCompanionEntityForSlot(final int slotIndex) {
+        if (slotIndex == LEAD_SLOT) {
+            return this.leadMount;
+        }
+        if (slotIndex == TEAM_SLOT) {
+            return this.teamMount;
+        }
         for (int i = 0; i < COMPANION_SLOTS.length; i++) {
             if (COMPANION_SLOTS[i] == slotIndex) {
                 return this.companions[i];

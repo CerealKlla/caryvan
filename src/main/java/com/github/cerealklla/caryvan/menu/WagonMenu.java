@@ -88,8 +88,33 @@ public final class WagonMenu extends AbstractContainerMenu {
         }
     }
 
+    /**
+     * Real live-test bug, 2026-10-26: "I was able to both click+drag and shift+click summon stones
+     * out of the wagon without A) getting a warning, or B) any ever being destroyed... only works
+     * with the pick up button." Confirmed against the real decompiled {@code
+     * AbstractContainerMenu#doClick}: a shift-click ({@code ContainerInput.QUICK_MOVE}) is dispatched
+     * from {@link #clicked}/{@code doClick} straight into this very method -- so {@link #clicked}'s
+     * own guard (below) running first SHOULD already cover it the same way it covers a plain click,
+     * but this is checked here too, independently, as the second of three real interception layers
+     * (the third being {@code CompanionSlot}/{@code MountSlot#onTake}'s own roll) so a shift-click
+     * removal is genuinely blocked at its OWN real execution point regardless of anything upstream,
+     * not just assumed covered by one single check.
+     */
+    private boolean requiresRemovalConfirm(final int slotIndex) {
+        return slotIndex >= 0 && slotIndex < this.slots.size()
+                && (this.slots.get(slotIndex) instanceof CompanionSlot || this.slots.get(slotIndex) instanceof MountSlot)
+                && this.slots.get(slotIndex).hasItem()
+                && this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart
+                && cart.isBroken();
+    }
+
     @Override
     public ItemStack quickMoveStack(final Player player, final int slotIndex) {
+        if (requiresRemovalConfirm(slotIndex)) {
+            ((com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) this.container)
+                    .requestCompanionSlotRemovalConfirm(player, slotIndex);
+            return ItemStack.EMPTY;
+        }
         ItemStack clicked = ItemStack.EMPTY;
         final Slot slot = this.slots.get(slotIndex);
         if (slot != null && slot.hasItem()) {
@@ -158,20 +183,20 @@ public final class WagonMenu extends AbstractContainerMenu {
      * Real live-test gap, 2026-10-26: removing a Companion/Summon Stone via a plain slot click
      * rolled the 50%-destroy chance immediately while Broken, with no "Are you sure?" warning --
      * only the GUI "Pick Up" button had one. {@code AbstractContainerMenu#clicked} is the single
-     * real entry point for EVERY click type, including shift-click (vanilla's own generic dispatch
-     * calls this entity's custom {@link #quickMoveStack} internally for a {@code QUICK_MOVE} click,
-     * so intercepting here covers both at once, confirmed against the real decompiled source) --
-     * cancel the click outright and send the real confirm dialog instead whenever it would remove a
-     * non-empty {@link CompanionSlot}'s item while Broken.
+     * real entry point for EVERY click type (confirmed against the real decompiled {@code
+     * doClick} -- {@code PICKUP}, {@code QUICK_MOVE}, and {@code QUICK_CRAFT} all dispatch from
+     * here) -- cancel the click outright and send the real confirm dialog instead whenever it would
+     * remove a non-empty {@link CompanionSlot}/{@link MountSlot}'s item while Broken.
+     *
+     * <p>Real live-test bug, same day: this originally only matched {@link CompanionSlot}, never
+     * {@link MountSlot} -- see {@link #requiresRemovalConfirm}'s own doc for the full fix (now
+     * shared with {@link #quickMoveStack} as an independent second check on that exact path).
      */
     @Override
     public void clicked(final int slotIndex, final int buttonNum, final net.minecraft.world.inventory.ContainerInput containerInput, final Player player) {
-        if (slotIndex >= 0 && slotIndex < this.slots.size()
-                && this.slots.get(slotIndex) instanceof CompanionSlot slot
-                && slot.hasItem()
-                && this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart
-                && cart.isBroken()) {
-            cart.requestCompanionSlotRemovalConfirm(player, slotIndex);
+        if (requiresRemovalConfirm(slotIndex)) {
+            ((com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) this.container)
+                    .requestCompanionSlotRemovalConfirm(player, slotIndex);
             return;
         }
         super.clicked(slotIndex, buttonNum, containerInput, player);

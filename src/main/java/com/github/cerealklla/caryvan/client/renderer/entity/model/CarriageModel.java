@@ -49,8 +49,10 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     // apart or so" -- a wheel-only multiplier on top of TRACK_SCALE, since TRACK_SCALE itself is
     // deliberately shared with the body's own X-axis dimensions here (see this class's own doc) --
     // widening it directly would also widen the body, which wasn't asked for. Widened a second time
-    // same day: "widen another 10% across the width" -- 1.05 * 1.10 = 1.155.
-    private static final float WHEEL_TRACK_EXTRA_SCALE = 1.155F;
+    // same day: "widen another 10% across the width" -- 1.05 * 1.10 = 1.155. Widened a third and
+    // final time same day -- "let's make it 5% more, and that should be it" -- 1.155 * 1.05 =
+    // 1.21275.
+    private static final float WHEEL_TRACK_EXTRA_SCALE = 1.21275F;
 
     private static final float WHEEL_TRACK_X = 14.0F * TRACK_SCALE * WHEEL_TRACK_EXTRA_SCALE;
     private static final float WHEEL_FRONT_Z = -10.0F * LENGTH_SCALE;

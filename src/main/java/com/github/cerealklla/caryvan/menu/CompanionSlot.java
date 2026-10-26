@@ -21,6 +21,20 @@ import net.minecraft.world.item.ItemStack;
  * [it was] too wounded to retrieve." Only applies when the owning cart ({@code container}) is a
  * {@link AbstractDamageableDrawnEntity} currently at 0 HP -- a healthy cart's Companion is always
  * recovered cleanly, same as before this change.
+ *
+ * <p><b>Real live-test bug fixed, 2026-10-26</b>: this originally only ever sent the "too wounded"
+ * message on a failed roll -- it never actually confiscated anything, so the player walked away
+ * with the item regardless (confirmed exploitable via shift-click/click-drag, 10/10 attempts, zero
+ * destructions). By the time {@link #onTake} runs, vanilla's own generic removal mechanics have
+ * already handed the real stack to the player; {@link AbstractDamageableDrawnEntity
+ * #rollDestroyOnBrokenRemoval} is called here and, on a failed roll, this method now actually
+ * empties the {@code stack} parameter -- for the plain-click/pickup path this is the SAME live
+ * object already stored as the player's carried stack (mutating it here genuinely confiscates it,
+ * confirmed against the real decompiled {@code AbstractContainerMenu#doClick}'s pickup branch,
+ * which stores then calls {@code onTake} with the identical reference). The shift-click path has
+ * its own, separate, earlier interception now too -- see {@code WagonMenu}/{@code
+ * CarriageMenu#quickMoveStack}'s own doc -- so this roll should rarely if ever actually need to fire
+ * for that path in practice; it stays here purely as defense-in-depth.
  */
 public final class CompanionSlot extends Slot {
 
@@ -35,12 +49,14 @@ public final class CompanionSlot extends Slot {
 
     @Override
     public void onTake(final Player player, final ItemStack stack) {
-        if (LyfeSummoningBridge.isLoaded() && player.level() instanceof ServerLevel level) {
-            if (this.container instanceof AbstractDamageableDrawnEntity cart && cart.isBroken()
-                    && level.getRandom().nextFloat() < 0.5F) {
-                player.sendSystemMessage(Component.literal(
-                        "The Companion was too wounded to retrieve."));
-            } else {
+        if (this.container instanceof AbstractDamageableDrawnEntity cart && player.level() instanceof ServerLevel level) {
+            if (cart.rollDestroyOnBrokenRemoval(level, this.index)) {
+                stack.setCount(0);
+                player.sendSystemMessage(Component.literal("Too wounded to retrieve."));
+                super.onTake(player, stack);
+                return;
+            }
+            if (LyfeSummoningBridge.isLoaded()) {
                 LyfeSummoningBridge.despawnCompanionCleanly(level, stack);
             }
         }

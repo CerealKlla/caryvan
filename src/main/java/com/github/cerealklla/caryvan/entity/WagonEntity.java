@@ -989,6 +989,18 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         return !stack.isEmpty() && LyfeSummoningBridge.isLoaded() && !LyfeSummoningBridge.isOnCooldown(stack, System.currentTimeMillis());
     }
 
+    /**
+     * Real live-test bug, 2026-10-26: "I was able to both click+drag and shift+click summon stones
+     * out of the wagon without A) getting a warning, or B) any ever being destroyed... only works
+     * with the pick up button." Root cause -- this method (and the whole slot-click confirm/roll
+     * mechanism it feeds) was only ever extended to the two {@link #COMPANION_LEFT_SLOT}/
+     * {@link #COMPANION_RIGHT_SLOT} cases; {@link #LEAD_SLOT}/{@link #TEAM_SLOT} (where a real
+     * Summoning Stone actually lives) were never resolved at all, so {@code
+     * AbstractDamageableDrawnEntity#confirmCompanionSlotRemoval}'s roll always had nothing to roll
+     * against for a Mount slot specifically, even once {@code WagonMenu}'s own {@code clicked}/
+     * {@code quickMoveStack} guards (see those classes' own doc) were widened to intercept
+     * {@code MountSlot} too.
+     */
     @Override
     protected Entity getCompanionEntityForSlot(final int slotIndex) {
         if (slotIndex == COMPANION_LEFT_SLOT) {
@@ -996,6 +1008,12 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         }
         if (slotIndex == COMPANION_RIGHT_SLOT) {
             return this.companionRight;
+        }
+        if (slotIndex == LEAD_SLOT) {
+            return this.leadMount;
+        }
+        if (slotIndex == TEAM_SLOT) {
+            return this.teamMount;
         }
         return null;
     }

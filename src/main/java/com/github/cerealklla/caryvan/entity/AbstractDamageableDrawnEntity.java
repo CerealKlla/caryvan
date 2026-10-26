@@ -104,11 +104,18 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     // Real design correction, 2026-10-26, per the user's own words: "I never said I wanted
     // 'cumulative lifetime damage' tracked." A ratcheted totalDamageTaken field was invented during
     // implementation, never actually requested -- the original spec's own wording ("nF is the
-    // number of functional wheels currently on the wagon") means live current state, not an
-    // ever-accumulating ledger. Removed entirely; see #computeBrokenWheelCount's own doc for the
-    // real replacement -- a pure function of current HP vs base Max HP, recomputed fresh every time,
-    // never a one-way ratchet.
-    /** Cached mirror of {@link #computeBrokenWheelCount()}, refreshed by {@link #refreshBrokenWheelCount()} after every single change to current health -- never mutated directly anywhere else. */
+    // number of functional wheels currently on the wagon") means live current state, not a
+    // SEPARATE ever-accumulating damage ledger. Removed entirely.
+    //
+    // Real follow-up correction, same day: Repair must raise this ceiling WITHOUT any instant heal
+    // of current health at all ("Repair... should not give an instant heal of any kind... raises
+    // the Temp Max HP by (1/4 wagon max hp) * wheels replaced"). Since health no longer moves when
+    // Repair runs, broken-wheel-count can no longer be a PURE function of current health either --
+    // if it were, Repair would have nothing to actually lower. It's authoritative, stored state
+    // again (and persisted -- see #addAdditionalSaveData), but ratcheted UP only by damage (via the
+    // live health-derived formula in #computeBrokenWheelCount, not a separate damage number -- this
+    // is the real distinction from the rejected totalDamageTaken model) and lowered ONLY by an
+    // explicit #repair(int) call, never by any kind of healing.
     private int brokenWheelCount;
     private long recentlyDamagedUntilMillis;
     private long passiveRepairUntilMillis;
@@ -311,9 +318,9 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     /**
      * Fully replaces vanilla's own {@code actuallyHurt} (armor/absorption/knockback bookkeeping that
      * doesn't apply to a cart) with this entity's own health model. Health itself is applied
-     * directly below; broken-wheel-count is a pure LIVE function of the resulting health, recomputed
-     * by {@link #refreshBrokenWheelCount()} right after -- see that method's own doc for the real
-     * design correction this followed (no more ratcheted damage tracker).
+     * directly below; {@link #brokenWheelCount} is then ratcheted UP (never down) to whatever the
+     * resulting health alone implies, via {@link #computeBrokenWheelCount()} -- see
+     * {@link #brokenWheelCount}'s own field doc for the real design history behind this shape.
      */
     @Override
     protected void actuallyHurt(final ServerLevel level, final DamageSource source, final float dmg) {
@@ -326,7 +333,15 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         // ever derives from on the way down. setHealth() clamps internally to [0, the real,
         // never-changing Attributes.MAX_HEALTH], so this alone can never raise health.
         this.setHealth(this.getHealth() - dmg);
-        refreshBrokenWheelCount();
+        // Ratchet UP only -- a hit only ever breaks MORE wheels than are already broken, never
+        // un-breaks one (that's #repair's own job, exclusively). Driven live off current health via
+        // #computeBrokenWheelCount, not a separate damage ledger -- the real distinction from the
+        // rejected totalDamageTaken model.
+        final int healthImplied = computeBrokenWheelCount();
+        if (healthImplied > this.brokenWheelCount) {
+            this.brokenWheelCount = healthImplied;
+            applyBrokenWheelCount();
+        }
         this.gameEvent(net.minecraft.world.level.gameevent.GameEvent.ENTITY_DAMAGE);
     }
 
@@ -344,22 +359,15 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     }
 
     /**
-     * Real design correction, 2026-10-26, per the user's own words: "I never said I wanted
-     * 'cumulative lifetime damage' tracked." The original spec's own wording -- "nF is the number
-     * of functional wheels currently on the wagon," "as the wagon takes damage, each % of damage
-     * taken will break an additional wheel" -- read plainly, means live CURRENT state, not an
-     * ever-accumulating ledger. The earlier {@code totalDamageTaken} ratchet (removed entirely) was
-     * invented during implementation, never actually requested -- same unrequested-complexity
-     * pattern as a couple of other same-night corrections (an invented companion-seat-bypass, an
-     * invented free-iron-farm prevention): don't add ratchets/persistence/irreversibility that
-     * weren't asked for.
-     *
-     * <p>Pure function of current health vs. base Max HP -- a dropped Max HP fraction maps directly
-     * to a broken-wheel count, recomputed fresh from {@link #getHealth()} every single call, with no
-     * memory of how it got there. This is a READ -- it never calls {@code setHealth}/touches the
-     * max-health attribute; current HP is the one and only source of truth it derives FROM, never
-     * the reverse (recomputing this must never itself move health, or the old "HP visually
-     * snaps/resets" bug would come right back).
+     * What CURRENT health ALONE implies the broken-wheel count should be -- a dropped Max HP
+     * fraction maps directly to a wheel count, recomputed fresh from {@link #getHealth()} every
+     * call, with no memory of how it got there. This is a READ, never touching {@code setHealth}/
+     * the max-health attribute. {@link #actuallyHurt} uses this to ratchet {@link #brokenWheelCount}
+     * UP (never down) -- see that field's own doc for why this is the live replacement for the
+     * rejected {@code totalDamageTaken} ledger, and why it's no longer the SOLE source of truth for
+     * {@link #brokenWheelCount} the way it briefly was (health no longer moves when {@link
+     * #repair(int)} lowers the broken count, so a pure function of health alone would have nothing
+     * for Repair to actually change).
      */
     private int computeBrokenWheelCount() {
         final int wheelCount = this.wheels.size();
@@ -369,21 +377,6 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         }
         final float fractionDamaged = Mth.clamp(1.0F - this.getHealth() / base, 0.0F, 1.0F);
         return Math.min(wheelCount, (int) Math.floor(fractionDamaged * wheelCount + 1.0e-4F));
-    }
-
-    /**
-     * Refreshes {@link #brokenWheelCount} from {@link #computeBrokenWheelCount()} and syncs it onto
-     * the renderer. Called after {@link #actuallyHurt}'s own hit and after {@link #repair(int)}'s own
-     * instant partial heal -- both genuinely able to move health across a wheel threshold. Real
-     * design correction, 2026-10-26: deliberately NOT called from {@link #tickRepairStateMachine()}'s
-     * own passive heal-over-time tick -- a wheel must never un-break from passive healing alone, per
-     * the user's own exact words, "they should ONLY be repaired by consuming a wheel with the repair
-     * button." That method's own Temp Max HP ceiling cap already guarantees its heal can never cross
-     * a threshold in the first place, so there is nothing for a call here to ever actually change.
-     */
-    private void refreshBrokenWheelCount() {
-        this.brokenWheelCount = computeBrokenWheelCount();
-        applyBrokenWheelCount();
     }
 
     /**
@@ -445,22 +438,27 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * since-corrected Max-HP-attribute bug (see {@link #getTempMaxHealthCeiling()}'s own doc): current
      * health was tracking/jumping whenever the real max-health attribute itself got dynamically
      * recomputed off wheel count, which read as unprompted "healing" even though no heal-over-time
-     * tick was actually involved. With max-health now truly constant and current health fully
-     * decoupled from any wheel-count-driven recompute, "passive regen should be 0" instead means
-     * exactly what it says structurally: outside an active Passive Repair window (this method) or
-     * {@link #repair(int)}'s own instant partial heal, current health never moves on its own at all --
-     * re-confirmed true by grepping this entire class for every {@code setHealth(} call site.
+     * tick was actually involved. With max-health now truly constant, "passive regen should be 0"
+     * instead means exactly what it says structurally: outside an active Passive Repair window (this
+     * method), current health never moves on its own at all -- re-confirmed true by grepping this
+     * entire class for every {@code setHealth(} call site.
      *
      * <p>Real design correction, same day, walking back an earlier over-extension: a wheel must
      * NEVER un-break from passive healing of any kind (neither this auto-triggered window nor the
-     * heal-over-time window {@link #repair(int)} itself kicks off) -- only {@link #repair(int)}'s own
-     * instant partial heal (consuming a real Wheel) is allowed to do that, per the user's own exact
-     * words: "they should ONLY be repaired by consuming a wheel with the repair button." This method
-     * deliberately does NOT call {@link #refreshBrokenWheelCount()} after its own heal -- the cap
-     * below already guarantees health can never rise past the live {@link #getTempMaxHealthCeiling()}
-     * (itself derived from the CURRENT {@link #brokenWheelCount}), so {@link #computeBrokenWheelCount()}
-     * run against that capped health can mathematically never come out lower than it already was; a
-     * wheel can only ever lower it via {@link #repair(int)} raising health past that ceiling first.
+     * heal-over-time window {@link #repair(int)} itself kicks off) -- per the user's own exact words,
+     * "they should ONLY be repaired by consuming a wheel with the repair button." The cap below
+     * already guarantees this heal can never rise past the live {@link #getTempMaxHealthCeiling()}
+     * (itself derived from {@link #brokenWheelCount}, which this method never touches directly
+     * either way).
+     *
+     * <p>Real follow-up correction, same day: {@link #repair(int)} itself no longer does ANY instant
+     * heal either -- "it instantly replaces a wheel and grants the passive regen buff again. There
+     * is no instant heal at all for the wagon... should not give an instant heal of any kind."
+     * Repair's real job is just three things: swap the wheel's own broken flag back to intact
+     * (lowering {@link #brokenWheelCount} directly, with zero health change), let that naturally
+     * raise {@link #getTempMaxHealthCeiling()}'s own return value, and grant/refresh THIS window --
+     * all the real healing after a Repair click happens only here, over time, same as the
+     * auto-triggered case.
      */
     private void tickRepairStateMachine() {
         final long now = System.currentTimeMillis();
@@ -481,8 +479,8 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
                 // capping against it would let no-wheel-replaced passive healing reach all the way back
                 // to full, which is exactly what this ceiling exists to prevent (per the user's own
                 // design correction -- see #getTempMaxHealthCeiling's own doc). This cap is also what
-                // guarantees a wheel can never un-break from this heal alone -- see this method's own
-                // doc for why #refreshBrokenWheelCount is deliberately NOT called here.
+                // guarantees a wheel can never un-break from this heal alone -- #brokenWheelCount is
+                // never touched here at all, only #repair(int) ever lowers it.
                 final float tempMaxCeiling = getTempMaxHealthCeiling();
                 if (this.getHealth() < tempMaxCeiling) {
                     final float healPerTick = (PASSIVE_REPAIR_FRACTION_OF_BASE * this.getBaseMaxHealth()) / (PASSIVE_REPAIR_MILLIS / 50L);
@@ -538,37 +536,29 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
 
     /**
      * Explicit Repair action -- consumes up to {@code wheelsAvailable} matching Wheels items (the
-     * caller already resolved/removed them from cargo), un-breaks that many wheels, grants an instant
-     * partial heal for the wheels actually swapped in, and starts a fresh 5-minute Passive Repair
-     * window regardless of current HP, per the approved plan's §5. Only meaningful while {@link
-     * #isRecentlyDamaged()} is false -- the caller is responsible for that gate (mirrors the GUI
-     * button's own "only clickable if not recently damaged" spec).
+     * caller already resolved/removed them from cargo) and starts/refreshes a fresh 5-minute Passive
+     * Repair window, per the approved plan's §5. Only meaningful while {@link #isRecentlyDamaged()}
+     * is false -- the caller is responsible for that gate (mirrors the GUI button's own "only
+     * clickable if not recently damaged" spec).
      *
-     * <p>Real design correction, 2026-10-26, per the user's own words: current health is only ever
-     * allowed to move via "an explicit heal (the Passive Repair tick, capped as above, or Repair's own
-     * instant partial heal when it swaps in Wheels)." Each wheel actually un-broken here instantly
-     * restores its own even share of the real base Max HP ({@code base / wheelCount}) directly to
-     * current health; {@link #refreshBrokenWheelCount()} (called right after) then re-derives
-     * {@link #brokenWheelCount} fresh from that new, higher health -- there is no separate "clear
-     * this many broken flags" step anymore (see {@link #computeBrokenWheelCount()}'s own doc for why
-     * a direct decrement was removed outright). No explicit ceiling cap is needed here either: since
-     * {@code toFix} can never exceed the LIVE current broken count, healing by exactly
-     * {@code toFix} wheel-shares can only ever move health up to right around the threshold {@code
-     * toFix} wheels below where it started -- {@code setHealth}'s own real clamp to {@code [0, base]}
-     * is a safe backstop regardless. {@link #tickRepairStateMachine()}'s own heal-over-time window
-     * (started fresh below, same as before) then continues on top of this for whatever's left.
+     * <p>Real design correction, 2026-10-26, per the user's own exact words: "it instantly replaces
+     * a wheel and grants the passive regen buff again. There is no instant heal at all for the
+     * wagon... should not give an instant heal of any kind. Visually puts on a new wheel, grants the
+     * Passive Regen Buff, and raises the Temp Max HP by (1/4 wagon max hp) * wheels replaced." This
+     * is now exactly those three things and nothing else: {@link #brokenWheelCount} is decremented
+     * directly (the wheel's own visual/broken flag, via {@link #applyBrokenWheelCount()}), which
+     * naturally raises what {@link #getTempMaxHealthCeiling()} returns from now on -- {@code
+     * current health is never touched here at all}. All of the actual healing happens afterward,
+     * over time, through the SAME Passive Repair window the auto-trigger uses (see {@link
+     * #tickRepairStateMachine()}), capped at the new, now-higher ceiling this just raised.
      *
      * @return how many wheels were actually un-broken (so the caller knows how many Wheels items were genuinely consumed).
      */
     public int repair(final int wheelsAvailable) {
-        final int toFix = Math.min(wheelsAvailable, computeBrokenWheelCount());
+        final int toFix = Math.min(wheelsAvailable, this.brokenWheelCount);
         if (toFix > 0) {
-            final int wheelCount = this.wheels.size();
-            if (wheelCount > 0) {
-                final float instantHeal = (this.getBaseMaxHealth() / wheelCount) * toFix;
-                this.setHealth(this.getHealth() + instantHeal);
-                refreshBrokenWheelCount();
-            }
+            this.brokenWheelCount -= toFix;
+            applyBrokenWheelCount();
         }
         this.passiveRepairUntilMillis = System.currentTimeMillis() + PASSIVE_REPAIR_MILLIS;
         return toFix;
@@ -662,11 +652,21 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * slot click that triggered the dialog was cancelled outright, never retried). Rolls the real
      * 50%-destroy chance (only while still {@link #isBroken()} at the moment of confirmation -- if
      * the cart was repaired in the meantime, no risk at all, matching the clarified risk model
-     * exactly) against the live Companion riding at {@code slotIndex} (see {@link
-     * #getCompanionEntityForSlot(int)}), then either clean-despawns it (success) or discards the
-     * live entity and leaves the player with nothing (failure) -- mirrors {@code
-     * menu.CompanionSlot#onTake}'s own roll exactly, kept there too as a defense-in-depth safety net
-     * for any path that isn't this one.
+     * exactly) against the live Companion/Summoning-Stone-mount riding at {@code slotIndex} (see
+     * {@link #getCompanionEntityForSlot(int)}), then either clean-despawns it (success) or discards
+     * the live entity and leaves the player with nothing (failure) -- mirrors {@code
+     * menu.CompanionSlot}/{@code menu.MountSlot#onTake}'s own roll exactly, kept there too as a
+     * defense-in-depth safety net for any path that isn't this one.
+     *
+     * <p>Real live-test bug, 2026-10-26: "I was able to both click+drag and shift+click summon
+     * stones out of the wagon without A) getting a warning, or B) any ever being destroyed... only
+     * works with the pick up button." Root cause -- this whole mechanism (this method, {@link
+     * #getCompanionEntityForSlot(int)}, and {@code WagonMenu}/{@code CarriageMenu}'s own
+     * {@code clicked}/{@code quickMoveStack} guards) was only ever built for {@code CompanionSlot},
+     * never extended to {@code MountSlot} (where a real Summoning Stone actually lives) -- all now
+     * fixed together. Despawn method is now chosen by the stack's own real item type ({@code
+     * LyfeSummoningBridge#isMountSummoningStone}), not by which slot it came from, since this method
+     * is shared across both slot kinds now.
      */
     public void confirmCompanionSlotRemoval(final net.minecraft.world.entity.player.Player player, final int slotIndex) {
         if (!(this.level() instanceof ServerLevel level) || !(this instanceof net.minecraft.world.entity.vehicle.ContainerEntity container)) {
@@ -683,11 +683,15 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             }
             container.setItem(slotIndex, net.minecraft.world.item.ItemStack.EMPTY);
             player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    "The Companion was too wounded to retrieve."));
+                    "Too wounded to retrieve."));
             return;
         }
         if (com.github.cerealklla.caryvan.bridge.LyfeSummoningBridge.isLoaded()) {
-            com.github.cerealklla.caryvan.bridge.LyfeSummoningBridge.despawnCompanionCleanly(level, stack);
+            if (com.github.cerealklla.caryvan.bridge.LyfeSummoningBridge.isMountSummoningStone(stack)) {
+                com.github.cerealklla.caryvan.bridge.LyfeSummoningBridge.despawnMountCleanly(level, stack);
+            } else {
+                com.github.cerealklla.caryvan.bridge.LyfeSummoningBridge.despawnCompanionCleanly(level, stack);
+            }
         }
         final net.minecraft.world.item.ItemStack removed = container.removeItemNoUpdate(slotIndex);
         if (!player.getInventory().add(removed)) {
@@ -695,7 +699,29 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         }
     }
 
-    /** Which live Companion entity (if any) currently occupies {@code slotIndex} -- overridden per concrete type, since slot layout differs between Wagon (2 slots) and Carriage (6). */
+    /**
+     * Whether removing whatever currently sits in {@code slotIndex} while this cart {@link
+     * #isBroken()} should roll the real 50%-destroy chance -- true whenever the roll fails,
+     * discarding the live bound entity for that slot (if any) as a side effect so the caller knows
+     * to confiscate the stack instead of letting it reach the player. Returns {@code false}
+     * unconditionally while not Broken (no risk at all outside that state). Shared by {@code
+     * menu.CompanionSlot}/{@code menu.MountSlot#onTake} -- see those classes' own doc for why a
+     * direct container-slot removal needs its own copy of this roll, separate from {@link
+     * #confirmCompanionSlotRemoval}, which only ever runs after the player has already confirmed the
+     * dialog and the original click was cancelled outright.
+     */
+    public boolean rollDestroyOnBrokenRemoval(final ServerLevel level, final int slotIndex) {
+        if (!this.isBroken() || level.getRandom().nextFloat() >= 0.5F) {
+            return false;
+        }
+        final Entity companion = this.getCompanionEntityForSlot(slotIndex);
+        if (companion != null) {
+            companion.discard();
+        }
+        return true;
+    }
+
+    /** Which live Companion/Summoning-Stone-mount entity (if any) currently occupies {@code slotIndex} -- overridden per concrete type, since slot layout differs between Wagon (2 mount + 2 companion slots) and Carriage (2 mount + 6 companion slots). */
     protected Entity getCompanionEntityForSlot(final int slotIndex) {
         return null;
     }
@@ -1002,11 +1028,12 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * rest of that mechanism (see {@link #getTempMaxHealthCeiling()}'s own doc). {@code super}'s own
      * call above already restores the real, unchanging max-health attribute and current health
      * directly (confirmed via real decompiled source: {@code LivingEntity} persists both, including
-     * the attribute via {@code AttributeInstance.Packed.LIST_CODEC}). {@link #brokenWheelCount}
-     * itself is no longer persisted at all -- it's now a pure function of current health (see
-     * {@link #computeBrokenWheelCount()}'s own doc), which {@code super} has already restored by the
-     * time this line runs, so {@link #refreshBrokenWheelCount()} re-derives it fresh here instead of
-     * trusting a separately-stored, now-redundant NBT value that could in principle drift.
+     * the attribute via {@code AttributeInstance.Packed.LIST_CODEC}).
+     *
+     * <p>Real follow-up correction, same day: {@link #brokenWheelCount} briefly stopped being
+     * persisted at all (when it was, for one round, a pure function of health) -- now that {@link
+     * #repair(int)} can lower it WITHOUT any health change (see that method's own doc), it's
+     * authoritative state again and genuinely needs its own NBT round-trip, same as before.
      */
     @Override
     protected void readAdditionalSaveData(final ValueInput input) {
@@ -1015,9 +1042,10 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         this.entityData.set(DATA_WOOD_TYPE, input.read("WoodType", com.mojang.serialization.Codec.STRING).orElse(WoodType.OAK.name()));
         this.ownerId = input.read("OwnerId", UUIDUtil.CODEC).orElse(null);
         this.ownerName = input.getString("OwnerName").orElse(null);
+        this.brokenWheelCount = input.getIntOr("BrokenWheelCount", 0);
         this.recentlyDamagedUntilMillis = input.getLongOr("RecentlyDamagedUntilMillis", 0L);
         this.passiveRepairUntilMillis = input.getLongOr("PassiveRepairUntilMillis", 0L);
-        refreshBrokenWheelCount();
+        applyBrokenWheelCount();
     }
 
     @Override
@@ -1029,6 +1057,7 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         if (this.ownerName != null) {
             output.putString("OwnerName", this.ownerName);
         }
+        output.putInt("BrokenWheelCount", this.brokenWheelCount);
         output.putLong("RecentlyDamagedUntilMillis", this.recentlyDamagedUntilMillis);
         output.putLong("PassiveRepairUntilMillis", this.passiveRepairUntilMillis);
     }

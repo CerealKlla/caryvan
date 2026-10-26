@@ -86,8 +86,22 @@ public final class CarriageMenu extends AbstractContainerMenu {
         }
     }
 
+    /** Mirrors {@code WagonMenu#requiresRemovalConfirm}'s own doc exactly. */
+    private boolean requiresRemovalConfirm(final int slotIndex) {
+        return slotIndex >= 0 && slotIndex < this.slots.size()
+                && (this.slots.get(slotIndex) instanceof CompanionSlot || this.slots.get(slotIndex) instanceof MountSlot)
+                && this.slots.get(slotIndex).hasItem()
+                && this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart
+                && cart.isBroken();
+    }
+
     @Override
     public ItemStack quickMoveStack(final Player player, final int slotIndex) {
+        if (requiresRemovalConfirm(slotIndex)) {
+            ((com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) this.container)
+                    .requestCompanionSlotRemovalConfirm(player, slotIndex);
+            return ItemStack.EMPTY;
+        }
         ItemStack clicked = ItemStack.EMPTY;
         final Slot slot = this.slots.get(slotIndex);
         if (slot != null && slot.hasItem()) {
@@ -135,12 +149,9 @@ public final class CarriageMenu extends AbstractContainerMenu {
     /** Mirrors {@code WagonMenu#clicked}'s own doc exactly. */
     @Override
     public void clicked(final int slotIndex, final int buttonNum, final net.minecraft.world.inventory.ContainerInput containerInput, final Player player) {
-        if (slotIndex >= 0 && slotIndex < this.slots.size()
-                && this.slots.get(slotIndex) instanceof CompanionSlot slot
-                && slot.hasItem()
-                && this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart
-                && cart.isBroken()) {
-            cart.requestCompanionSlotRemovalConfirm(player, slotIndex);
+        if (requiresRemovalConfirm(slotIndex)) {
+            ((com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) this.container)
+                    .requestCompanionSlotRemovalConfirm(player, slotIndex);
             return;
         }
         super.clicked(slotIndex, buttonNum, containerInput, player);
