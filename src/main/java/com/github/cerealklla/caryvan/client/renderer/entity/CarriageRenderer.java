@@ -24,6 +24,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Leashable;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.state.properties.WoodType;
 import net.minecraft.world.phys.Vec3;
@@ -75,17 +76,23 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
     }
 
     /**
-     * Real user reference diagram, 2026-10-26 (3 green squares = lead/team-left/team-right, orange
-     * rounded rect = the Carriage): lead-to-team-left and lead-to-team-right already render for free
-     * via vanilla's own generic per-{@code Leashable} rope rendering (both team horses really are
-     * leashed to the lead, see {@code CarriageEntity#syncOneTeamLeash}) -- those two need no code
-     * here at all. What the diagram adds on top, and what this method now actually builds: each team
-     * horse individually tethered down to the carriage (not both of the carriage's own quad-offset
-     * ropes converging on whichever single horse {@code CarriageEntity#syncWagonPullTarget}'s own
-     * one-holder preference happened to pick as the real vanilla pull target), plus a genuinely new
-     * direct team-left-to-team-right rope -- not a real vanilla leash relationship (both are actually
-     * leashed to the lead, not each other), so nothing renders it automatically; built the exact same
-     * custom-{@link EntityRenderState.LeashState} way the carriage's own ropes always have been.
+     * Real fix, 2026-10-26: live-test report, ropes "meet at a point under the carriage instead of
+     * attaching at the front corners" and "do not attach to the two horses in front... stick straight
+     * ahead into empty space." Root cause, confirmed by actually rereading {@code CarriageEntity
+     * #tick()}: it returns immediately on the client, before {@code tickMounts}/{@code
+     * syncWagonPullTarget}/every other server-only method that ever assigns {@code teamLeftMount}/
+     * {@code teamRightMount} runs -- those are plain, never-synced fields, so {@code
+     * entity.getTeamLeftMount()}/{@code getTeamRightMount()} were ALWAYS {@code null} on this (client-
+     * side) renderer, meaning this method ALWAYS silently took the single-holder fallback below, never
+     * the real per-horse branch the reference diagram asked for, regardless of how many team horses
+     * were actually alive.
+     *
+     * <p>Resolved instead purely from vanilla's own already-synced {@link Leashable} data, no custom
+     * fields needed at all: the carriage's own {@link Entity#getLeashHolder()} IS one of the two team
+     * horses (whichever {@code syncWagonPullTarget}'s left-then-right preference picked -- always
+     * team-left when it's alive), itself a real {@link Leashable}; ITS OWN {@code getLeashHolder()} is
+     * the real lead; {@link Leashable#leashableLeashedTo(Entity)} then finds every entity leashed to
+     * that same lead, which includes the other team horse.
      */
     private void buildLeashRopes(final CarriageEntity entity, final CarriageRenderState state, final float partialTicks) {
         final Entity holder = entity.getLeashHolder();
@@ -103,20 +110,30 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         final Vec3 leftCarriageOffset = entityPos.add(offsets[0].yRot(-bodyRotRad));
         final Vec3 rightCarriageOffset = entityPos.add(offsets[1].yRot(-bodyRotRad));
 
-        final Entity teamLeft = entity.getTeamLeftMount();
-        final Entity teamRight = entity.getTeamRightMount();
-        final boolean teamLeftAlive = teamLeft != null && teamLeft.isAlive();
-        final boolean teamRightAlive = teamRight != null && teamRight.isAlive();
+        Entity otherTeamHorse = null;
+        if (holder instanceof Leashable holderLeashable) {
+            final Entity lead = holderLeashable.getLeashHolder();
+            if (lead != null) {
+                for (final Leashable leashed : Leashable.leashableLeashedTo(lead)) {
+                    if (leashed instanceof Entity leashedEntity && leashedEntity.isAlive() && leashedEntity != holder) {
+                        otherTeamHorse = leashedEntity;
+                        break;
+                    }
+                }
+            }
+        }
 
-        if (teamLeftAlive && teamRightAlive) {
-            addRope(ropes, leftCarriageOffset, startBlockLight, startSkyLight, teamLeft, partialTicks);
-            addRope(ropes, rightCarriageOffset, startBlockLight, startSkyLight, teamRight, partialTicks);
-            addRope(ropes, teamLeft.getRopeHoldPosition(partialTicks), getBlockLightLevel(teamLeft, partialTicks),
-                    getSkyLightLevel(teamLeft, partialTicks), teamRight, partialTicks);
+        if (otherTeamHorse != null) {
+            // holder == team-left (left-then-right preference); otherTeamHorse == team-right.
+            addRope(ropes, leftCarriageOffset, startBlockLight, startSkyLight, holder, partialTicks);
+            addRope(ropes, rightCarriageOffset, startBlockLight, startSkyLight, otherTeamHorse, partialTicks);
+            addRope(ropes, holder.getRopeHoldPosition(partialTicks), getBlockLightLevel(holder, partialTicks),
+                    getSkyLightLevel(holder, partialTicks), otherTeamHorse, partialTicks);
         } else {
             // Fallback -- fewer than 2 live team horses (e.g. mid-respawn, or one was lost picking up
-            // a Broken carriage): both carriage-side ropes converge on whichever single mount vanilla's
-            // own one-holder model actually picked, same behavior this method always had.
+            // a Broken carriage, or holder is actually the lead with no team horses left at all): both
+            // carriage-side ropes converge on whichever single mount vanilla's own one-holder model
+            // actually picked, same behavior this method always had.
             addRope(ropes, leftCarriageOffset, startBlockLight, startSkyLight, holder, partialTicks);
             addRope(ropes, rightCarriageOffset, startBlockLight, startSkyLight, holder, partialTicks);
         }
