@@ -11,77 +11,55 @@ import net.minecraft.util.Mth;
 /**
  * Carriage's geometry (design-document.md §8, built 2026-10-26).
  *
- * <p><b>Real structural redesign, 2026-10-26 -- enclosed cabin, Phase 1 of 4</b>: the user compared
- * the Carriage against a real reference photo and found it was just a stretched/widened Wagon.
+ * <p><b>Real third rebuild, 2026-10-26 -- scrapped the curved-hull/stepped-taper body entirely</b>:
+ * explicit user verdict after the previous (reference-photo-matched, correctly-sized, visible-door)
+ * body was actually seen live -- "I don't see any real improvement over the previous iterations." Not
+ * a bug fix; the user found and downloaded a new, deliberately simpler reference model and asked for
+ * the body/roof/driver-platform to be rebuilt against it directly (doors/interior-seat mechanism, the
+ * HP/damage system, and the 3-horse team are all unrelated to body shape and untouched by this pass).
+ * Read directly via the Read tool (two real rendered images, not a paraphrase -- same lesson as the
+ * earlier lost-image failure this session), the new reference is a faceted hexagonal-prism cabin:
+ * chamfered (angle-cut) front/back-and-top/bottom corners instead of a square box, built entirely from
+ * flat angled panels (no curves/stepped-taper approximation at all -- genuinely simpler in Minecraft's
+ * own cuboid system than the previous body, not just simpler-looking), a plain tented roof following
+ * that same chamfered footprint to a flat ridge strip (no two-tier crown/rail/finials), narrow vertical
+ * window slits on the angled shoulder faces (not wide panes), a simple 2-step side platform with a
+ * small seat and one diagonal strut for the driver (not a separate raised box on risers), and 4
+ * same-size wheels (the old front/back size difference is gone).
  *
- * <p><b>Real second rebuild, 2026-10-26, against the actual reference photo</b> -- a process failure
- * upstream meant the Phase 1 pass above was built from a text paraphrase ("windows, roof, 2 doors")
- * of the user's own real reference image, never the image itself, and it showed: "just a wider and
- * longer wagon," per the user, once actually described back to them. This pass was authored directly
- * against that real photo (a period landau/berline carriage), studied feature by feature rather than
- * patched incrementally on top of the old box shape:
- * <ul>
- *   <li><b>Lower body is a curved hull, not a box</b> -- the photo's body panel sweeps upward at both
- *   the front and rear ends rather than running flat the full length. Minecraft's cuboid-only model
- *   system can't author a true curve, so this is approximated the same way good voxel builds always
- *   fake a curve: a short run of progressively shorter, progressively inset boxes stepping outward
- *   past each end of the enclosed cabin ({@link #hullCurl}) -- a real, visible stepped taper reading
- *   as a swept curve at normal camera distance, not a flat panel with rounded corners.</li>
- *   <li><b>Three window bays per side, not one long gap</b> -- the photo shows a door bay, a fixed
- *   center window bay, and a solid rear quarter panel, each a distinct division along the body
- *   (matching the mechanic spec's own "one door per side" -- only the FRONT bay is an actual door;
- *   the photo's visible 3-bay rhythm on its own near side is reused for proportion/shape even though
- *   this mod's own established interaction design keeps exactly 2 real doors, one per full side).</li>
- *   <li><b>Roof has real silhouette</b> -- a two-tier stepped crown (a narrower upper band on the
- *   wider lower eave) plus a perimeter rail with finial posts at the corners and mid-sides, matching
- *   the photo's visible brass luggage rail -- not a single flat slab.</li>
- *   <li><b>Driver's bench is a real separate elevated structure</b> -- raised well above the cabin
- *   roofline on its own riser posts, out in front of the enclosed cabin, matching the photo's raised
- *   coachman's box (the photo's own folding leather calash hood above that box is not built -- static
- *   geometry only, like the doors, see the Phase-3 door doc for why that's an established pattern in
- *   this model already).</li>
- *   <li><b>A real rear footman's platform</b> -- a low external step/cushion at the very back, outside
- *   the enclosed cabin, matching the photo's low rear jump seat (companions already ride here via the
- *   pre-existing roof/running-board Companion slots, see {@code CarriageEntity}'s own doc -- this is
- *   only the visual structure those slots were always meant to sit on/near).</li>
- *   <li><b>Front wheels smaller than back wheels</b> -- the photo's front wheels are visibly smaller
- *   in diameter than the rear pair (a real period-carriage proportion, letting the front wheels turn
- *   under the body). Both wheel pairs still touch the same ground line ({@link #FRONT_WHEEL_RADIUS}/
- *   {@link #BACK_WHEEL_RADIUS} each supply their own {@code wheelY = -radius}), and the body's own
- *   floor stays perfectly level, tied to the (unchanged) back-axle height -- only the decorative
- *   {@code axleFront} strut is repositioned down to actually meet the now-shorter front hub, not the
- *   whole chassis.</li>
- * </ul>
- * The overall length/width footprint ({@link #LENGTH_SCALE}/{@link #TRACK_SCALE}/{@link
- * #WHEEL_TRACK_X}/{@code sideFrontZ}/{@code sideBackZ}) is deliberately UNCHANGED from the first
- * pass -- {@code CarriageEntity}'s own door/interior-seat/hitch Z constants are independently
- * duplicated against this envelope (client-only {@code ModelPart} types can't be referenced from
- * that common-sourceset class, see the root project's own "client-only type in a common class" rule),
- * so reshaping the body's own silhouette within the same footprint avoids a much larger coordinated
- * re-tuning pass across files this rebuild wasn't asked to touch.
+ * <p><b>How the chamfer panels are really built</b> -- each side of the hexagonal cross-section is 3
+ * bands stacked in Y: a vertical {@code wallMid}/door band (full half-width, {@link #sideX}), a
+ * {@code lowerChamfer} band tilting IN toward the floor, and an {@code upperChamfer} band tilting IN
+ * toward the roof. The tilt is a REAL rotation, not another stepped approximation: confirmed via
+ * {@code ModelPart#translateAndRotate}'s own real decompiled bytecode that {@code PartPose} composes
+ * {@code new Quaternionf().rotationZYX(zRot, yRot, xRot)} -- i.e. {@code xRot} is applied first, in
+ * the part's own original local frame, before the {@code yRot} that (as in every other wall/door panel
+ * in this model) swings the part from "built along local X" to "running along world Z." Building a
+ * chamfer band's own local box with local Y spanning its real slant length (hypotenuse of the desired
+ * horizontal inset and vertical rise) and setting {@code xRot} to the matching slant angle tilts the
+ * band's cross-section correctly BEFORE that alignment swing, so the two compose into a real diagonal
+ * plane that still runs the cabin's full length -- see {@link #chamferPanel} for the worked derivation.
+ * The front/back end caps use a simpler trick that doesn't need this: 3 stacked plain rectangles of
+ * decreasing-then-increasing width (floor/mid/ridge) already read as the same hexagon silhouette from
+ * the near-head-on angle those faces are actually seen at, with no tilted geometry needed there at all.
  *
- * <p>This class's own Y convention, named honestly this rebuild (the first pass's {@code
- * WALL_Y_BOTTOM}/{@code WALL_Y_TOP} names were backwards from physical up/down and are not reused):
- * {@link #FLOOR_Y}=0 is the body's own floor; Y becomes MORE NEGATIVE going UP (standard Minecraft
- * entity-model convention, confirmed the same way {@link WagonModel}'s own doc already derived it
- * against {@code com.mojang.math.Axis}'s real rotation convention). {@link #BELT_Y}, {@link
- * #WINDOW_TOP_Y}, and {@link #WALL_TOP_Y} climb upward from there in that order.
+ * <p>The overall length/width footprint ({@link #LENGTH_SCALE}/{@link #TRACK_SCALE}/{@code
+ * sideFrontZ}/{@code sideBackZ}) is still deliberately unchanged from every earlier pass, for the same
+ * reason as before -- {@code CarriageEntity}'s own door/interior-seat/hitch Z constants are
+ * independently duplicated against this envelope.
  */
 public final class CarriageModel extends EntityModel<CarriageRenderState> {
 
-    // Real reference-photo proportion, 2026-10-26: the front wheels are visibly smaller in diameter
-    // than the back pair. Both still touch the same ground line -- see this class's own top-level doc.
-    private static final float BACK_WHEEL_RADIUS = 11.0F;
-    private static final float FRONT_WHEEL_RADIUS = 8.0F;
-    private static final float BACK_WHEEL_Y = -BACK_WHEEL_RADIUS;
-    private static final float FRONT_WHEEL_Y = -FRONT_WHEEL_RADIUS;
+    // Real reference-model fix, 2026-10-26: "4 wire-spoke wheels, all one size" -- the previous
+    // pass's smaller-front/bigger-back distinction is gone.
+    private static final float WHEEL_RADIUS = 10.0F;
+    private static final float WHEEL_Y = -WHEEL_RADIUS;
 
     /** Mirrors {@code CarriageRenderer}'s own identical constant -- see {@code WagonModel#BROKEN_TILT_DEGREES}'s own doc for why the single source of truth lives on the Model class. */
     public static final float BROKEN_TILT_DEGREES = 12.0F;
 
     // Real user spec: "a little longer and wider... to fit 4 inside comfortably." Deliberately
-    // UNCHANGED by this rebuild -- see this class's own top-level doc for why the overall footprint
-    // stays fixed while the body's own shape within it is rebuilt.
+    // UNCHANGED across every rebuild -- see this class's own top-level doc.
     private static final float LENGTH_SCALE = 2.2F;
     private static final float TRACK_SCALE = 1.3F;
     private static final float WHEEL_TRACK_EXTRA_SCALE = 1.21275F;
@@ -90,21 +68,25 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     private static final float WHEEL_FRONT_Z = -10.0F * LENGTH_SCALE;
     private static final float WHEEL_BACK_Z = 10.0F * LENGTH_SCALE;
 
-    // Real Y convention, rebuilt 2026-10-26 -- see this class's own top-level doc. FLOOR_Y=0 is
-    // physically lowest; each constant below climbs higher (more negative) in turn.
+    // Real hexagonal cross-section, 2026-10-26 -- see this class's own top-level doc. FLOOR_Y=0 is
+    // physically lowest; each constant below climbs higher (more negative) in turn. sideX is the
+    // cross-section's own widest point (the vertical mid-wall/door band); floorHalfWidth/
+    // ridgeHalfWidth are narrower, chamfered inward from there.
     private static final float FLOOR_Y = 0.0F;
-    // Real fix, 2026-10-26: these three were never scaled like every other dimension in this file,
-    // leaving the whole cabin only 9 units (0.5625 blocks) tall -- roughly the same as the wheel
-    // radius, confirmed directly against a live screenshot ("the box is 6 inches tall, and is at its
-    // tallest the same height as the wheels"). A real enclosed cabin needs to actually fit a seated
-    // player and read as several times taller than the wheels, matching the reference photo.
-    private static final float SKIRT_HEIGHT = 9.0F;
-    private static final float WINDOW_HEIGHT = 10.0F;
-    private static final float HEADER_HEIGHT = 5.0F;
-    private static final float BELT_Y = FLOOR_Y - SKIRT_HEIGHT;
-    private static final float WINDOW_TOP_Y = BELT_Y - WINDOW_HEIGHT;
-    private static final float WALL_TOP_Y = WINDOW_TOP_Y - HEADER_HEIGHT;
-    private static final float WALL_HEIGHT = FLOOR_Y - WALL_TOP_Y;
+    private static final float sideX = 14.0F * TRACK_SCALE;
+    private static final float BOTTOM_INSET = 4.0F;
+    private static final float TOP_INSET = 6.0F;
+    private static final float LOWER_CHAMFER_HEIGHT = 5.0F;
+    private static final float MID_HEIGHT = 14.0F;
+    private static final float UPPER_CHAMFER_HEIGHT = 7.0F;
+    private static final float WAIST_Y = FLOOR_Y - LOWER_CHAMFER_HEIGHT;
+    private static final float MID_TOP_Y = WAIST_Y - MID_HEIGHT;
+    private static final float ROOF_Y = MID_TOP_Y - UPPER_CHAMFER_HEIGHT;
+    private static final float FLOOR_HALF_WIDTH = sideX - BOTTOM_INSET;
+    private static final float RIDGE_HALF_WIDTH = sideX - TOP_INSET;
+    // Kept for cornerPost's own existing call shape -- posts still run the real full body height.
+    private static final float WALL_HEIGHT = FLOOR_Y - ROOF_Y;
+    private static final float WALL_TOP_Y = ROOF_Y;
 
     private static final float GROUNDED_COUNTER_ZROT = (float) -Math.toRadians(BROKEN_TILT_DEGREES);
 
@@ -117,10 +99,6 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     // Carriage redesign Phase 3, 2026-10-26: "a damaged door should visually hang off its hinges."
     private static final float DOOR_SWING_DEGREES = 35.0F;
     private static final float DOOR_DROOP_DEGREES = 12.0F;
-
-    // Real reference-photo hull taper, 2026-10-26 -- see #hullCurl's own doc.
-    private static final int CURL_SEGMENTS = 3;
-    private static final float CURL_SEGMENT_LENGTH = 2.5F;
 
     private final ModelPart leftWheelFrontNormal;
     private final ModelPart leftWheelFrontBroken;
@@ -151,9 +129,7 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         this.fallenWheelFront = parts.getChild("fallenWheelFront");
         this.fallenWheelBack = parts.getChild("fallenWheelBack");
         // The door parts are added to "body" (see #createLayer), which is itself a child of "root" --
-        // one level deeper than the wheels above, which are direct children of "root" instead. Real
-        // crash fixed 2026-10-26: NoSuchElementException from calling parts.getChild("wallDoorLeft")
-        // directly, one level too shallow for where this part actually lives.
+        // one level deeper than the wheels above, which are direct children of "root" instead.
         final ModelPart body = parts.getChild("body");
         this.wallDoorLeft = body.getChild("wallDoorLeft");
         this.wallDoorLeftBroken = body.getChild("wallDoorLeftBroken");
@@ -165,10 +141,10 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     @Override
     public void setupAnim(final CarriageRenderState state) {
         final boolean fullyBroken = state.broken;
-        applyWheelPair(this.leftWheelFrontNormal, this.leftWheelFrontBroken, state.wheelRotation[0], state.wheelBroken[0], fullyBroken, false, WHEEL_TRACK_X, FRONT_WHEEL_Y);
-        applyWheelPair(this.rightWheelFrontNormal, this.rightWheelFrontBroken, state.wheelRotation[1], state.wheelBroken[1], fullyBroken, true, -WHEEL_TRACK_X, FRONT_WHEEL_Y);
-        applyWheelPair(this.leftWheelBackNormal, this.leftWheelBackBroken, state.wheelRotation[2], state.wheelBroken[2], fullyBroken, false, WHEEL_TRACK_X, BACK_WHEEL_Y);
-        applyWheelPair(this.rightWheelBackNormal, this.rightWheelBackBroken, state.wheelRotation[3], state.wheelBroken[3], fullyBroken, true, -WHEEL_TRACK_X, BACK_WHEEL_Y);
+        applyWheelPair(this.leftWheelFrontNormal, this.leftWheelFrontBroken, state.wheelRotation[0], state.wheelBroken[0], fullyBroken, false, WHEEL_TRACK_X);
+        applyWheelPair(this.rightWheelFrontNormal, this.rightWheelFrontBroken, state.wheelRotation[1], state.wheelBroken[1], fullyBroken, true, -WHEEL_TRACK_X);
+        applyWheelPair(this.leftWheelBackNormal, this.leftWheelBackBroken, state.wheelRotation[2], state.wheelBroken[2], fullyBroken, false, WHEEL_TRACK_X);
+        applyWheelPair(this.rightWheelBackNormal, this.rightWheelBackBroken, state.wheelRotation[3], state.wheelBroken[3], fullyBroken, true, -WHEEL_TRACK_X);
 
         // Carriage redesign Phase 3 -- entirely independent of the wheel/fully-broken state above;
         // a door can be hanging off its hinges on a perfectly drivable carriage.
@@ -189,20 +165,16 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         }
     }
 
-    /**
-     * Mirrors {@code WagonModel#applyWheelPair}'s own doc exactly, generalized 2026-10-26 to take the
-     * wheel's own {@code wheelY} directly (previously a single shared module-wide constant) now that
-     * front and back wheels use different radii/heights -- see this class's own top-level doc.
-     */
+    /** Mirrors {@code WagonModel#applyWheelPair}'s own doc exactly. */
     private static void applyWheelPair(final ModelPart normal, final ModelPart broken, final float rotation,
-            final boolean wheelBroken, final boolean fullyBroken, final boolean grounded, final float bakedX, final float wheelY) {
+            final boolean wheelBroken, final boolean fullyBroken, final boolean grounded, final float bakedX) {
         normal.xRot = rotation;
         broken.xRot = rotation;
         normal.x = bakedX;
-        normal.y = wheelY;
+        normal.y = WHEEL_Y;
         normal.zRot = 0.0F;
         if (fullyBroken && grounded) {
-            final float[] compensated = compensateForTilt(bakedX, wheelY);
+            final float[] compensated = compensateForTilt(bakedX, WHEEL_Y);
             normal.visible = false;
             broken.visible = true;
             broken.x = compensated[0];
@@ -213,7 +185,7 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
             broken.visible = false;
         } else {
             broken.x = bakedX;
-            broken.y = wheelY;
+            broken.y = WHEEL_Y;
             broken.zRot = 0.0F;
             normal.visible = !wheelBroken;
             broken.visible = wheelBroken;
@@ -231,38 +203,33 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     public static LayerDefinition createLayer() {
         final EasyMeshBuilder root = new EasyMeshBuilder("root");
 
-        root.addChild(wheel("leftWheelFrontNormal", WHEEL_TRACK_X, WHEEL_FRONT_Z, false, FRONT_WHEEL_RADIUS));
-        root.addChild(wheel("leftWheelFrontBroken", WHEEL_TRACK_X, WHEEL_FRONT_Z, true, FRONT_WHEEL_RADIUS));
-        root.addChild(wheel("rightWheelFrontNormal", -WHEEL_TRACK_X, WHEEL_FRONT_Z, false, FRONT_WHEEL_RADIUS));
-        root.addChild(wheel("rightWheelFrontBroken", -WHEEL_TRACK_X, WHEEL_FRONT_Z, true, FRONT_WHEEL_RADIUS));
-        root.addChild(wheel("leftWheelBackNormal", WHEEL_TRACK_X, WHEEL_BACK_Z, false, BACK_WHEEL_RADIUS));
-        root.addChild(wheel("leftWheelBackBroken", WHEEL_TRACK_X, WHEEL_BACK_Z, true, BACK_WHEEL_RADIUS));
-        root.addChild(wheel("rightWheelBackNormal", -WHEEL_TRACK_X, WHEEL_BACK_Z, false, BACK_WHEEL_RADIUS));
-        root.addChild(wheel("rightWheelBackBroken", -WHEEL_TRACK_X, WHEEL_BACK_Z, true, BACK_WHEEL_RADIUS));
+        root.addChild(wheel("leftWheelFrontNormal", WHEEL_TRACK_X, WHEEL_FRONT_Z, false));
+        root.addChild(wheel("leftWheelFrontBroken", WHEEL_TRACK_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("rightWheelFrontNormal", -WHEEL_TRACK_X, WHEEL_FRONT_Z, false));
+        root.addChild(wheel("rightWheelFrontBroken", -WHEEL_TRACK_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("leftWheelBackNormal", WHEEL_TRACK_X, WHEEL_BACK_Z, false));
+        root.addChild(wheel("leftWheelBackBroken", WHEEL_TRACK_X, WHEEL_BACK_Z, true));
+        root.addChild(wheel("rightWheelBackNormal", -WHEEL_TRACK_X, WHEEL_BACK_Z, false));
+        root.addChild(wheel("rightWheelBackBroken", -WHEEL_TRACK_X, WHEEL_BACK_Z, true));
 
         // Mirrors WagonModel's own doc exactly -- fallen debris always built with the damaged-look
         // geometry; baked position is irrelevant, #setupAnim always overrides x/y/zRot dynamically.
-        // Modeled at the back wheel's own radius -- debris doesn't need to match whichever specific
-        // wheel broke, just read as "a broken wheel lying nearby."
-        root.addChild(wheel("fallenWheelFront", FALLEN_TARGET_X, WHEEL_FRONT_Z, true, BACK_WHEEL_RADIUS));
-        root.addChild(wheel("fallenWheelBack", FALLEN_TARGET_X, WHEEL_BACK_Z, true, BACK_WHEEL_RADIUS));
+        root.addChild(wheel("fallenWheelFront", FALLEN_TARGET_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("fallenWheelBack", FALLEN_TARGET_X, WHEEL_BACK_Z, true));
 
         final EasyMeshBuilder body = new EasyMeshBuilder("body");
-        body.setRotationPoint(0.0F, -BACK_WHEEL_RADIUS, 0.0F);
+        body.setRotationPoint(0.0F, -WHEEL_RADIUS, 0.0F);
 
         final EasyMeshBuilder base = new EasyMeshBuilder("base", 0, 0);
         base.addBox(-13.0F * TRACK_SCALE, -9.0F, -2.0F, 27.0F * TRACK_SCALE, 18.0F * LENGTH_SCALE, 1);
         base.xRot = -Mth.PI / 2.0F;
         base.yRot = -Mth.PI / 2.0F;
 
-        // Real reference-photo fix, 2026-10-26: the front axle now has to reach DOWN from the body's
-        // own floor (pegged to the back wheel's taller hub) to the shorter front hub -- the floor
-        // itself stays level; only this decorative strut moves. frontHubWorldY - bodyOriginWorldY =
-        // -FRONT_WHEEL_RADIUS - (-BACK_WHEEL_RADIUS) = BACK_WHEEL_RADIUS - FRONT_WHEEL_RADIUS.
-        final float axleFrontY = BACK_WHEEL_RADIUS - FRONT_WHEEL_RADIUS;
+        // Real reference-model fix, 2026-10-26: all 4 wheels are now the same size, so both axles
+        // sit at the same height again -- no more front-axle offset strut.
         final EasyMeshBuilder axleFront = new EasyMeshBuilder("axleFront", 0, 20);
         axleFront.addBox(-WHEEL_TRACK_X, -1.0F, -1.0F, WHEEL_TRACK_X * 2.0F, 2, 2);
-        axleFront.setRotationPoint(0.0F, axleFrontY, WHEEL_FRONT_Z);
+        axleFront.setRotationPoint(0.0F, 0.0F, WHEEL_FRONT_Z);
 
         final EasyMeshBuilder axleBack = new EasyMeshBuilder("axleBack", 0, 20);
         axleBack.addBox(-WHEEL_TRACK_X, -1.0F, -1.0F, WHEEL_TRACK_X * 2.0F, 2, 2);
@@ -270,150 +237,93 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
 
         final float postFrontZ = -15.0F * LENGTH_SCALE;
         final float postBackZ = 14.0F * LENGTH_SCALE;
-        final float postX = 14.0F * TRACK_SCALE;
-        final float postXInner = 13.0F * TRACK_SCALE;
+        final float postX = sideX;
+        final float postXInner = sideX - 1.0F;
         final EasyMeshBuilder postFrontLeft = cornerPost("postFrontLeft", -postX, postFrontZ);
         final EasyMeshBuilder postFrontRight = cornerPost("postFrontRight", postXInner, postFrontZ);
         final EasyMeshBuilder postBackLeft = cornerPost("postBackLeft", -postX, postBackZ);
         final EasyMeshBuilder postBackRight = cornerPost("postBackRight", postXInner, postBackZ);
-
-        // A middle pair of posts -- the longer body otherwise has an unsupported span over the 4
-        // interior seats; same cornerPost shape as the front/back pairs.
         final float postMidZ = 0.0F;
         final EasyMeshBuilder postMidLeft = cornerPost("postMidLeft", -postX, postMidZ);
         final EasyMeshBuilder postMidRight = cornerPost("postMidRight", postXInner, postMidZ);
 
         final float sideFrontZ = -15.0F * LENGTH_SCALE;
         final float sideBackZ = 15.0F * LENGTH_SCALE;
-        final float sideX = 14.0F * TRACK_SCALE;
 
-        // Real reference-photo redesign, 2026-10-26: 3 real window bays per side instead of one long
-        // undifferentiated gap -- a front DOOR bay, a fixed center WINDOW bay, and a solid rear
-        // quarter panel, matching the photo's own visible division rhythm on its near side (this
-        // mod's own established mechanic still keeps exactly 2 real doors, one per full side -- see
-        // this class's own top-level doc).
+        // Real reference-model redesign, 2026-10-26: one plain door bay (front) + one plain wall bay
+        // (the rest of the cabin's length) per side -- replacing the old 3-window-bay system, since
+        // the new reference has no distinct window-pane bays on the vertical mid-wall at all (its own
+        // window slits live on the upper chamfer band instead, see #upperChamferPair below).
         final float doorLength = 5.0F * LENGTH_SCALE;
         final float doorFrontZ = sideFrontZ;
         final float doorBackZ = doorFrontZ + doorLength;
-        final EasyMeshBuilder wallDoorLeft = wallSegment("wallDoorLeft", -sideX, WALL_TOP_Y, WALL_HEIGHT, doorFrontZ, doorBackZ);
-        final EasyMeshBuilder wallDoorRight = wallSegment("wallDoorRight", sideX, WALL_TOP_Y, WALL_HEIGHT, doorFrontZ, doorBackZ);
-        // Real fix, 2026-10-26: live-test report, "I have no idea where the actual door is (it
-        // doesn't look like a door)" -- wallDoorLeft/Right were built from the exact same plain
-        // wallSegment() shape every other wall/window panel uses, with nothing marking them as
-        // interactive. Adds a real protruding frame outline + a handle knob directly onto these same
-        // two builders (more boxes on the same part, same "one builder, many boxes" pattern this
-        // file already uses elsewhere) -- a genuine geometry change, not a texture trick, consistent
-        // with how a broken door/wheel already reads as damaged through shape alone in this model.
-        addDoorDetails(wallDoorLeft, doorLength, WALL_HEIGHT);
-        addDoorDetails(wallDoorRight, doorLength, WALL_HEIGHT);
+        final EasyMeshBuilder wallDoorLeft = wallSegment("wallDoorLeft", -sideX, WAIST_Y, MID_HEIGHT, doorFrontZ, doorBackZ);
+        final EasyMeshBuilder wallDoorRight = wallSegment("wallDoorRight", sideX, WAIST_Y, MID_HEIGHT, doorFrontZ, doorBackZ);
+        addDoorDetails(wallDoorLeft, doorLength, MID_HEIGHT);
+        addDoorDetails(wallDoorRight, doorLength, MID_HEIGHT);
 
-        // Real "hang off its hinges" damaged-door geometry, Carriage redesign Phase 3 -- the hinge is
-        // the door's own BACK edge (doorBackZ, away from the driver's bench); the panel swings open
-        // away from the body and sags, a genuine geometry change, not a recolor.
-        final EasyMeshBuilder wallDoorLeftBroken = brokenDoorPanel("wallDoorLeftBroken", -sideX, WALL_TOP_Y, WALL_HEIGHT, doorBackZ, doorLength);
-        final EasyMeshBuilder wallDoorRightBroken = brokenDoorPanel("wallDoorRightBroken", sideX, WALL_TOP_Y, WALL_HEIGHT, doorBackZ, doorLength);
+        final EasyMeshBuilder wallDoorLeftBroken = brokenDoorPanel("wallDoorLeftBroken", -sideX, WAIST_Y, MID_HEIGHT, doorBackZ, doorLength);
+        final EasyMeshBuilder wallDoorRightBroken = brokenDoorPanel("wallDoorRightBroken", sideX, WAIST_Y, MID_HEIGHT, doorBackZ, doorLength);
 
-        // Fixed center window bay -- same skirt/gap/header shape the door bay's own window portion
-        // implies, just with no door panel at all (nothing ever opens/breaks here).
-        final float fixedWinFrontZ = doorBackZ;
-        final float fixedWinBackZ = fixedWinFrontZ + doorLength;
-        final EasyMeshBuilder wallSkirtLeft = wallSegment("wallSkirtLeft", -sideX, BELT_Y, SKIRT_HEIGHT, fixedWinFrontZ, fixedWinBackZ);
-        final EasyMeshBuilder wallSkirtRight = wallSegment("wallSkirtRight", sideX, BELT_Y, SKIRT_HEIGHT, fixedWinFrontZ, fixedWinBackZ);
-        final EasyMeshBuilder wallHeaderLeft = wallSegment("wallHeaderLeft", -sideX, WALL_TOP_Y, HEADER_HEIGHT, fixedWinFrontZ, fixedWinBackZ);
-        final EasyMeshBuilder wallHeaderRight = wallSegment("wallHeaderRight", sideX, WALL_TOP_Y, HEADER_HEIGHT, fixedWinFrontZ, fixedWinBackZ);
+        final EasyMeshBuilder wallMidLeft = wallSegment("wallMidLeft", -sideX, WAIST_Y, MID_HEIGHT, doorBackZ, sideBackZ);
+        final EasyMeshBuilder wallMidRight = wallSegment("wallMidRight", sideX, WAIST_Y, MID_HEIGHT, doorBackZ, sideBackZ);
 
-        // Solid rear quarter panel -- the photo's own body runs solid (no window) from the last bay
-        // back to the curling rear end.
-        final float rearPanelFrontZ = fixedWinBackZ;
-        final float rearPanelBackZ = sideBackZ;
-        final EasyMeshBuilder rearPanelLeft = wallSegment("rearPanelLeft", -sideX, WALL_TOP_Y, WALL_HEIGHT, rearPanelFrontZ, rearPanelBackZ);
-        final EasyMeshBuilder rearPanelRight = wallSegment("rearPanelRight", sideX, WALL_TOP_Y, WALL_HEIGHT, rearPanelFrontZ, rearPanelBackZ);
+        // Real hexagonal chamfer bands, 2026-10-26 -- see this class's own top-level doc for the real
+        // tilt derivation. Lower band tapers the body IN toward the floor; upper band tapers it IN
+        // toward the roof. Each is split front/back of a centered window-slit gap on the upper band
+        // only, matching the reference's own narrow vertical window slits on the angled shoulder face.
+        final EasyMeshBuilder lowerChamferLeft = chamferPanel("lowerChamferLeft", -1.0F, FLOOR_Y, FLOOR_HALF_WIDTH, sideX,
+                BOTTOM_INSET, LOWER_CHAMFER_HEIGHT, sideFrontZ, sideBackZ);
+        final EasyMeshBuilder lowerChamferRight = chamferPanel("lowerChamferRight", 1.0F, FLOOR_Y, FLOOR_HALF_WIDTH, sideX,
+                BOTTOM_INSET, LOWER_CHAMFER_HEIGHT, sideFrontZ, sideBackZ);
 
-        // Real reference-photo hull curl, 2026-10-26 -- see #hullCurl's own doc. Reads as the body
-        // sweeping up and tapering to a point beyond both the front door and the rear quarter panel,
-        // instead of the old flat box silhouette.
-        final EasyMeshBuilder hullCurlFrontLeft = hullCurl("hullCurlFrontLeft", -sideX, sideFrontZ, -1.0F);
-        final EasyMeshBuilder hullCurlFrontRight = hullCurl("hullCurlFrontRight", sideX, sideFrontZ, -1.0F);
-        final EasyMeshBuilder hullCurlBackLeft = hullCurl("hullCurlBackLeft", -sideX, sideBackZ, 1.0F);
-        final EasyMeshBuilder hullCurlBackRight = hullCurl("hullCurlBackRight", sideX, sideBackZ, 1.0F);
+        final float windowGap = 4.0F;
+        final float windowCenterZ = (sideFrontZ + sideBackZ) / 2.0F;
+        final float windowStartZ = windowCenterZ - windowGap / 2.0F;
+        final float windowEndZ = windowCenterZ + windowGap / 2.0F;
+        final EasyMeshBuilder upperChamferLeftFront = chamferPanel("upperChamferLeftFront", -1.0F, MID_TOP_Y, sideX, RIDGE_HALF_WIDTH,
+                TOP_INSET, UPPER_CHAMFER_HEIGHT, sideFrontZ, windowStartZ);
+        final EasyMeshBuilder upperChamferLeftBack = chamferPanel("upperChamferLeftBack", -1.0F, MID_TOP_Y, sideX, RIDGE_HALF_WIDTH,
+                TOP_INSET, UPPER_CHAMFER_HEIGHT, windowEndZ, sideBackZ);
+        final EasyMeshBuilder upperChamferRightFront = chamferPanel("upperChamferRightFront", 1.0F, MID_TOP_Y, sideX, RIDGE_HALF_WIDTH,
+                TOP_INSET, UPPER_CHAMFER_HEIGHT, sideFrontZ, windowStartZ);
+        final EasyMeshBuilder upperChamferRightBack = chamferPanel("upperChamferRightBack", 1.0F, MID_TOP_Y, sideX, RIDGE_HALF_WIDTH,
+                TOP_INSET, UPPER_CHAMFER_HEIGHT, windowEndZ, sideBackZ);
 
-        // Real reference-photo roof, 2026-10-26 -- a two-tier stepped crown plus a perimeter brass
-        // rail with finial posts, instead of a single flat slab. See #roofCrown/#roofRail/#roofFinials.
+        // Real end caps, 2026-10-26 -- 3 stacked plain rectangles (floor/mid/ridge widths) per end.
+        // No tilted geometry needed here at all -- see this class's own top-level doc for why a
+        // stepped-width stack already reads as the same hexagon silhouette from the near-head-on
+        // angle these faces are actually seen at.
+        final EasyMeshBuilder endCapFront = endCap("endCapFront", sideFrontZ, -1.0F);
+        final EasyMeshBuilder endCapBack = endCap("endCapBack", sideBackZ, 1.0F);
+
+        // Real plain tented roof, 2026-10-26 -- continues the upper chamfer's own taper further up to
+        // a flat ridge strip, with a small eave overhang on the length (not on the width -- the body's
+        // own end caps already close the silhouette there) so no separate gable infill is needed at
+        // either end.
         final float roofOverhang = 1.0F;
-        final float cabinLength = sideBackZ - sideFrontZ;
-        final float cabinCenterZ = (sideFrontZ + sideBackZ) / 2.0F;
-        final float roofBaseHeight = 1.0F;
-        final float crownHeight = 1.0F;
-        final float crownInset = 8.0F;
-        final EasyMeshBuilder roofBase = new EasyMeshBuilder("roofBase", 0, 50);
-        roofBase.addBox(-(sideX + roofOverhang), -roofBaseHeight, -(cabinLength / 2.0F + roofOverhang),
-                (sideX + roofOverhang) * 2.0F, roofBaseHeight, cabinLength + roofOverhang * 2.0F);
-        roofBase.setRotationPoint(0.0F, WALL_TOP_Y, cabinCenterZ);
+        final float roofLengthOverhang = 2.0F;
+        final float roofHeight = 9.0F;
+        final float roofRidgeHalfWidth = 2.0F;
+        final EasyMeshBuilder roofLeft = chamferPanel("roofLeft", -1.0F, ROOF_Y, RIDGE_HALF_WIDTH + roofOverhang, roofRidgeHalfWidth,
+                RIDGE_HALF_WIDTH + roofOverhang - roofRidgeHalfWidth, roofHeight, sideFrontZ - roofLengthOverhang, sideBackZ + roofLengthOverhang);
+        final EasyMeshBuilder roofRight = chamferPanel("roofRight", 1.0F, ROOF_Y, RIDGE_HALF_WIDTH + roofOverhang, roofRidgeHalfWidth,
+                RIDGE_HALF_WIDTH + roofOverhang - roofRidgeHalfWidth, roofHeight, sideFrontZ - roofLengthOverhang, sideBackZ + roofLengthOverhang);
+        final float roofTopY = ROOF_Y - roofHeight;
+        final EasyMeshBuilder roofRidge = new EasyMeshBuilder("roofRidge", 0, 50);
+        roofRidge.addBox(-roofRidgeHalfWidth, -1.0F, -(sideBackZ - sideFrontZ) / 2.0F - roofLengthOverhang,
+                roofRidgeHalfWidth * 2.0F, 1, (sideBackZ - sideFrontZ) + roofLengthOverhang * 2.0F);
+        roofRidge.setRotationPoint(0.0F, roofTopY, (sideFrontZ + sideBackZ) / 2.0F);
 
-        final float crownY = WALL_TOP_Y - roofBaseHeight;
-        final EasyMeshBuilder roofCrown = new EasyMeshBuilder("roofCrown", 0, 52);
-        roofCrown.addBox(-sideX * 0.6F, -crownHeight, -(cabinLength / 2.0F - crownInset),
-                sideX * 1.2F, crownHeight, cabinLength - crownInset * 2.0F);
-        roofCrown.setRotationPoint(0.0F, crownY, cabinCenterZ);
-
-        final float railThickness = 0.5F;
-        final float railY = crownY - crownHeight;
-        final EasyMeshBuilder roofRail = roofRail("roofRail", sideX + roofOverhang, cabinLength / 2.0F + roofOverhang, railThickness, railY, cabinCenterZ);
-        final EasyMeshBuilder roofFinials = roofFinials("roofFinials", sideX + roofOverhang, cabinLength / 2.0F + roofOverhang, railY - railThickness, cabinCenterZ);
-
-        final float benchWidth = 22.0F * TRACK_SCALE;
-        final float benchXInner = 11.0F * TRACK_SCALE;
-
-        // Real reference-photo elevated driver's bench, 2026-10-26 -- out in front of the enclosed
-        // cabin (past the front hull curl) and raised well above the roofline on its own riser posts,
-        // same backrest+seat split WagonModel's own bench uses, just shifted onto a real structure
-        // instead of sitting at the same height as the interior seats. The photo's own folding leather
-        // calash hood above this seat is not built -- static geometry only, same established "not
-        // every real-world detail needs its own animation state" pattern the doors already use.
-        final float frontBenchZ = -40.0F;
-        final float riserHeight = 4.0F;
-        final float benchBaseY = WALL_TOP_Y - riserHeight;
-        final EasyMeshBuilder benchRiserLeft = new EasyMeshBuilder("benchRiserLeft", 0, 40);
-        benchRiserLeft.addBox(-0.5F, 0.0F, -0.5F, 1, FLOOR_Y - benchBaseY, 1);
-        benchRiserLeft.setRotationPoint(-benchXInner, benchBaseY, frontBenchZ);
-        final EasyMeshBuilder benchRiserRight = new EasyMeshBuilder("benchRiserRight", 0, 40);
-        benchRiserRight.addBox(-0.5F, 0.0F, -0.5F, 1, FLOOR_Y - benchBaseY, 1);
-        benchRiserRight.setRotationPoint(benchXInner, benchBaseY, frontBenchZ);
-
-        final EasyMeshBuilder frontBenchBack = new EasyMeshBuilder("frontBenchBack", 0, 36);
-        frontBenchBack.addBox(-benchXInner, -7.0F, 0.0F, benchWidth, 7, 1);
-        frontBenchBack.setRotationPoint(0.0F, benchBaseY, frontBenchZ);
-
-        final EasyMeshBuilder frontBenchSeat = new EasyMeshBuilder("frontBenchSeat", 0, 44);
-        frontBenchSeat.addBox(-benchXInner, -1.0F, -8.0F, benchWidth, 1, 8);
-        frontBenchSeat.setRotationPoint(0.0F, benchBaseY, frontBenchZ);
-
-        // Real reference-photo rear footman's platform, 2026-10-26 -- a low external step/cushion
-        // outside the enclosed cabin, beyond the rear hull curl, matching the photo's low rear jump
-        // seat. Deliberately simple (one step slab + one cushion slab, no backrest) -- the photo's own
-        // rear seat reads the same way, unlike the driver's own taller bench.
-        final float rearPlatformZ = 44.0F;
-        final float rearPlatformSeatY = -2.0F;
-        final EasyMeshBuilder rearPlatformStep = new EasyMeshBuilder("rearPlatformStep", 0, 48);
-        rearPlatformStep.addBox(-benchXInner, 0.0F, -3.0F, benchWidth, 1, 6);
-        rearPlatformStep.setRotationPoint(0.0F, FLOOR_Y, rearPlatformZ);
-        final EasyMeshBuilder rearPlatformCushion = new EasyMeshBuilder("rearPlatformCushion", 0, 48);
-        rearPlatformCushion.addBox(-benchXInner, -1.0F, -3.0F, benchWidth, 1, 6);
-        rearPlatformCushion.setRotationPoint(0.0F, rearPlatformSeatY, rearPlatformZ);
-
-        // Two interior bench rows -- the 4 non-combatant seats, spaced back from the front bench
-        // toward the rear. Plain flat seat slabs (no backrest -- face the same direction as the front
-        // bench, back-to-back with the row ahead, same as a real forward-facing coach interior).
-        final float interiorBench1Z = 5.0F * LENGTH_SCALE;
-        final float interiorBench2Z = 11.0F * LENGTH_SCALE; // leaves clearance before the back wall at 15*LENGTH_SCALE
-
-        final EasyMeshBuilder interiorBench1 = new EasyMeshBuilder("interiorBench1", 0, 44);
-        interiorBench1.addBox(-benchXInner, -1.0F, -4.0F, benchWidth, 1, 8);
-        interiorBench1.setRotationPoint(0.0F, -9.0F, interiorBench1Z);
-
-        final EasyMeshBuilder interiorBench2 = new EasyMeshBuilder("interiorBench2", 0, 44);
-        interiorBench2.addBox(-benchXInner, -1.0F, -4.0F, benchWidth, 1, 8);
-        interiorBench2.setRotationPoint(0.0F, -9.0F, interiorBench2Z);
+        // Real simple driver's platform, 2026-10-26 -- a 2-step side platform with a small seat and
+        // one diagonal strut, replacing the old separate raised coachman's box on risers entirely.
+        // Built on BOTH sides (not just one, like the reference's own single platform) to keep the
+        // existing left/right driver-and-passenger seat mechanic intact -- the reference is a style
+        // guide for the platform's own shape, not a literal "only one seat" requirement this mod's
+        // mechanic doesn't share.
+        final float platformZ = (doorFrontZ + doorBackZ) / 2.0F;
+        final EasyMeshBuilder platformLeft = driverPlatform("PlatformLeft", -1.0F, platformZ);
+        final EasyMeshBuilder platformRight = driverPlatform("PlatformRight", 1.0F, platformZ);
 
         body.addChild(base);
         body.addChild(axleFront);
@@ -428,26 +338,36 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         body.addChild(wallDoorRight);
         body.addChild(wallDoorLeftBroken);
         body.addChild(wallDoorRightBroken);
-        body.addChild(wallSkirtLeft);
-        body.addChild(wallSkirtRight);
-        body.addChild(wallHeaderLeft);
-        body.addChild(wallHeaderRight);
-        body.addChild(rearPanelLeft);
-        body.addChild(rearPanelRight);
-        body.addChild(hullCurlFrontLeft);
-        body.addChild(hullCurlFrontRight);
-        body.addChild(hullCurlBackLeft);
-        body.addChild(hullCurlBackRight);
-        body.addChild(roofBase);
-        body.addChild(roofCrown);
-        body.addChild(roofRail);
-        body.addChild(roofFinials);
-        body.addChild(benchRiserLeft);
-        body.addChild(benchRiserRight);
-        body.addChild(frontBenchBack);
-        body.addChild(frontBenchSeat);
-        body.addChild(rearPlatformStep);
-        body.addChild(rearPlatformCushion);
+        body.addChild(wallMidLeft);
+        body.addChild(wallMidRight);
+        body.addChild(lowerChamferLeft);
+        body.addChild(lowerChamferRight);
+        body.addChild(upperChamferLeftFront);
+        body.addChild(upperChamferLeftBack);
+        body.addChild(upperChamferRightFront);
+        body.addChild(upperChamferRightBack);
+        body.addChild(endCapFront);
+        body.addChild(endCapBack);
+        body.addChild(roofLeft);
+        body.addChild(roofRight);
+        body.addChild(roofRidge);
+        body.addChild(platformLeft);
+        body.addChild(platformRight);
+
+        // Two interior bench rows -- the 4 non-combatant seats, unaffected by the body-shape rebuild.
+        final float benchWidth = 22.0F * TRACK_SCALE;
+        final float benchXInner = 11.0F * TRACK_SCALE;
+        final float interiorBench1Z = 5.0F * LENGTH_SCALE;
+        final float interiorBench2Z = 11.0F * LENGTH_SCALE;
+
+        final EasyMeshBuilder interiorBench1 = new EasyMeshBuilder("interiorBench1", 0, 44);
+        interiorBench1.addBox(-benchXInner, -1.0F, -4.0F, benchWidth, 1, 8);
+        interiorBench1.setRotationPoint(0.0F, -9.0F, interiorBench1Z);
+
+        final EasyMeshBuilder interiorBench2 = new EasyMeshBuilder("interiorBench2", 0, 44);
+        interiorBench2.addBox(-benchXInner, -1.0F, -4.0F, benchWidth, 1, 8);
+        interiorBench2.setRotationPoint(0.0F, -9.0F, interiorBench2Z);
+
         body.addChild(interiorBench1);
         body.addChild(interiorBench2);
         root.addChild(body);
@@ -455,7 +375,6 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         return EasyMeshBuilder.rootLayer(root, 64, 64);
     }
 
-    /** Corner/mid posts -- real fix, 2026-10-26: spans the full {@link #FLOOR_Y}-to-{@link #WALL_TOP_Y} height exactly (9 units); the first pass's {@code postHeight}=8 offset against a hardcoded box height of 9 left the post floating 1 unit above the true floor. */
     private static EasyMeshBuilder cornerPost(final String name, final float x, final float z) {
         final EasyMeshBuilder post = new EasyMeshBuilder(name, 0, 40);
         post.addBox(-0.5F, 0.0F, -0.5F, 1, WALL_HEIGHT, 1);
@@ -464,8 +383,8 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     }
 
     /**
-     * A flat panel running along the body's Z axis (length), used for the cabin's walls/doors --
-     * "build along local X, then yRot 90 degrees to align with Z." {@code yTopEdge} is the physically
+     * A flat vertical panel running along the body's Z axis (length) at a FIXED half-width -- used
+     * for the door/plain-wall mid bands, which don't taper. {@code yTopEdge} is the physically
      * HIGHER (more negative) edge the panel hangs down from by {@code height}.
      */
     private static EasyMeshBuilder wallSegment(final String name, final float x, final float yTopEdge, final float height, final float zStart, final float zEnd) {
@@ -479,32 +398,50 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     }
 
     /**
-     * Real fix, 2026-10-26 -- see this door's own call site doc. Adds a raised frame outline (4 thin
-     * strips around the panel's own perimeter, protruding symmetrically past the plain panel's own
-     * {@code [-0.5, 0.5]} Z thickness so it reads from either side) plus a handle knob near the
-     * panel's own FRONT edge (local X near {@code -length/2}, i.e. {@code doorFrontZ} -- opposite
-     * {@link #brokenDoorPanel}'s own hinge at {@code doorBackZ}, the real opposite-the-hinge handle
-     * placement a real door has) -- all added directly onto the already-built {@code door} part, in
-     * the SAME local "along local X, pre-yRot-alignment" space {@link #wallSegment} itself builds in.
+     * A real tilted (chamfered) panel running along the body's Z axis -- see this class's own
+     * top-level doc for the full rotation-composition derivation. Spans from a BOTTOM edge at
+     * {@code (bottomHalfWidth, bottomY)} to a TOP edge at {@code (topHalfWidth, bottomY -
+     * verticalRise)}, tapering inward by {@code horizontalInset = |topHalfWidth - bottomHalfWidth|}
+     * over that rise. {@code sideSign} is {@code -1} for the left side, {@code +1} for the right --
+     * NOT just the sign of {@code x} (the panel's own pivot sits at the half-width, which is always
+     * positive; the sign has to be passed explicitly to pick the correct mirrored tilt direction).
      */
-    private static void addDoorDetails(final EasyMeshBuilder door, final float length, final float height) {
-        // Real fix, 2026-10-26: "I don't see a door or door frame anywhere" -- confirmed via a real
-        // getExtentsForGui bake check (not reasoning alone) that the first pass's own
-        // frameDepth=1.4 only protruded 0.2 units past the plain panel's own 1.0-unit thickness on
-        // each side (0.0125 blocks, under a quarter-inch) -- genuinely imperceptible at normal camera
-        // distance, on a part with no real painted texture detail to otherwise show contrast. These
-        // numbers are now a real, clearly-visible protrusion instead.
-        final float frameThickness = 1.5F;
-        final float frameDepth = 3.0F;
-        final float frameZ = -frameDepth / 2.0F;
-        door.addBox(-length / 2.0F, 0.0F, frameZ, length, frameThickness, frameDepth);
-        door.addBox(-length / 2.0F, height - frameThickness, frameZ, length, frameThickness, frameDepth);
-        door.addBox(-length / 2.0F, 0.0F, frameZ, frameThickness, height, frameDepth);
-        door.addBox(length / 2.0F - frameThickness, 0.0F, frameZ, frameThickness, height, frameDepth);
+    private static EasyMeshBuilder chamferPanel(final String name, final float sideSign, final float bottomY,
+            final float bottomHalfWidth, final float topHalfWidth, final float horizontalInset, final float verticalRise,
+            final float zStart, final float zEnd) {
+        final float length = zEnd - zStart;
+        final float zCenter = (zStart + zEnd) / 2.0F;
+        final double slantLength = Math.sqrt((double) horizontalInset * horizontalInset + (double) verticalRise * verticalRise);
+        final double theta = Math.atan2(horizontalInset, verticalRise);
+        final EasyMeshBuilder panel = new EasyMeshBuilder(name, 0, 31);
+        panel.addBox(-length / 2.0F, 0.0F, -0.5F, length, (float) slantLength, 1);
+        panel.setRotationPoint(sideSign * bottomHalfWidth, bottomY, zCenter);
+        panel.yRot = sideSign < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
+        // Left (sideSign<0) tilts positive so world X grows more negative going up; right mirrors it.
+        // See this class's own top-level doc for the real derivation this sign convention comes from.
+        panel.xRot = sideSign < 0.0F ? (float) theta : (float) -theta;
+        return panel;
+    }
 
-        final float handleSize = 1.2F;
-        final float handleX = -length / 2.0F + frameThickness + 1.5F;
-        door.addBox(handleX, height * 0.4F, -2.5F, handleSize, handleSize, handleSize);
+    /**
+     * The front/back faces closing the hexagonal prism -- 3 stacked plain rectangles (floor/mid/ridge
+     * half-widths), no tilted geometry at all. See this class's own top-level doc for why that's a
+     * reasonable simplification specifically for these 2 faces. {@code dirSign} is {@code -1} for the
+     * front face (builds toward {@code -Z}) and {@code +1} for the back (builds toward {@code +Z}).
+     */
+    private static EasyMeshBuilder endCap(final String name, final float z, final float dirSign) {
+        final EasyMeshBuilder cap = new EasyMeshBuilder(name, 0, 31);
+        final float depth = 1.0F;
+        // Always extends INWARD (toward the cabin's own center) from the pivot edge: for the front
+        // face (dirSign<0, pivot = the most-negative Z boundary), inward is +Z, so local z starts at
+        // 0; for the back face (pivot = the most-positive Z boundary), inward is -Z, so local z
+        // starts at -depth.
+        final float zNear = dirSign < 0.0F ? 0.0F : -depth;
+        cap.addBox(-FLOOR_HALF_WIDTH, WAIST_Y, zNear, FLOOR_HALF_WIDTH * 2.0F, LOWER_CHAMFER_HEIGHT, depth);
+        cap.addBox(-sideX, MID_TOP_Y, zNear, sideX * 2.0F, MID_HEIGHT, depth);
+        cap.addBox(-RIDGE_HALF_WIDTH, ROOF_Y, zNear, RIDGE_HALF_WIDTH * 2.0F, UPPER_CHAMFER_HEIGHT, depth);
+        cap.setRotationPoint(0.0F, 0.0F, z);
+        return cap;
     }
 
     /**
@@ -515,7 +452,6 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
      */
     private static EasyMeshBuilder brokenDoorPanel(final String name, final float x, final float yTopEdge, final float height, final float hingeZ, final float length) {
         final EasyMeshBuilder door = new EasyMeshBuilder(name, 0, 31);
-        // Spans from the hinge (local X=0, pre-alignment) back toward the door's own front edge.
         door.addBox(-length, 0.0F, -0.5F, length, height, 1);
         door.setRotationPoint(x, yTopEdge, hingeZ);
         final float baseYRot = x < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
@@ -525,62 +461,80 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         return door;
     }
 
+    /** See this door's own call site doc (unchanged from the previous pass's fix -- the frame/handle geometry itself isn't affected by the body-shape rebuild). */
+    private static void addDoorDetails(final EasyMeshBuilder door, final float length, final float height) {
+        final float frameThickness = 1.5F;
+        final float frameDepth = 3.0F;
+        final float frameZ = -frameDepth / 2.0F;
+        door.addBox(-length / 2.0F, 0.0F, frameZ, length, frameThickness, frameDepth);
+        door.addBox(-length / 2.0F, height - frameThickness, frameZ, length, frameThickness, frameDepth);
+        door.addBox(-length / 2.0F, 0.0F, frameZ, frameThickness, height, frameDepth);
+        door.addBox(length / 2.0F - frameThickness, 0.0F, frameZ, frameThickness, height, frameDepth);
+
+        final float handleSize = 1.2F;
+        final float handleX = -length / 2.0F + frameThickness + 1.0F;
+        door.addBox(handleX, height * 0.4F, -2.5F, handleSize, handleSize, handleSize);
+    }
+
     /**
-     * Real reference-photo hull taper, 2026-10-26 -- Minecraft's cuboid-only model system can't
-     * author the photo's true curved body panel, so this fakes it the way voxel builds always fake a
-     * curve: {@link #CURL_SEGMENTS} boxes stepping outward from the cabin's own front/back edge
-     * ({@code zEdge}, in the direction {@code zDirSign} points), each shorter (bottom edge climbing
-     * toward {@link #BELT_Y}) and each pulled slightly further inward in X than the last -- reading as
-     * the body sweeping up and tapering to a point past the enclosed cabin, same spirit as the broken-
-     * wheel/broken-door geometry work already in this model (a real shape change, not a texture trick).
+     * The real simple 2-step driver's platform, 2026-10-26 -- a low outer step, a higher inner step,
+     * a small flat seat cushion, and one diagonal support strut, all projecting outward in X from the
+     * body's own side at {@code platformZ}. {@code sideSign} is {@code -1} for the left platform,
+     * {@code +1} for the right.
      */
-    private static EasyMeshBuilder hullCurl(final String name, final float sideX, final float zEdge, final float zDirSign) {
-        final EasyMeshBuilder curl = new EasyMeshBuilder(name, 0, 31);
-        final float thickness = 1.0F;
-        for (int i = 0; i < CURL_SEGMENTS; i++) {
-            final float segHeight = SKIRT_HEIGHT * (CURL_SEGMENTS - i) / (CURL_SEGMENTS + 1.0F);
-            final float xOutset = Math.abs(sideX) * (1.0F - 0.12F * (i + 1));
-            final float localX = sideX < 0.0F ? -xOutset : xOutset - thickness;
-            final float zStart = zDirSign < 0.0F ? zEdge - CURL_SEGMENT_LENGTH * (i + 1) : zEdge + CURL_SEGMENT_LENGTH * i;
-            curl.addBox(localX, BELT_Y, zStart, thickness, segHeight, CURL_SEGMENT_LENGTH);
-        }
-        return curl;
+    private static EasyMeshBuilder driverPlatform(final String name, final float sideSign, final float platformZ) {
+        final EasyMeshBuilder platform = new EasyMeshBuilder(name, 0, 40);
+        final float lowerStepY = 0.0F;
+        final float lowerStepOuter = sideX + 8.0F;
+        final float lowerStepInner = sideX + 1.0F;
+        final float upperStepY = -5.0F;
+        final float upperStepOuter = sideX + 5.0F;
+        final float upperStepInner = sideX + 0.5F;
+        final float seatY = -7.0F;
+        final float seatOuter = sideX + 4.0F;
+        final float seatInner = sideX + 0.5F;
+        final float stepZLen = 10.0F;
+        final float stepZStart = -stepZLen / 2.0F;
+
+        // Box X-span must be given smallest-first regardless of side -- resolve explicitly per side.
+        final float lowerX0 = sideSign < 0.0F ? -lowerStepOuter : lowerStepInner;
+        final float lowerWidth = lowerStepOuter - lowerStepInner;
+        platform.addBox(lowerX0, lowerStepY - 1.0F, stepZStart, lowerWidth, 1.0F, stepZLen);
+
+        final float upperX0 = sideSign < 0.0F ? -upperStepOuter : upperStepInner;
+        final float upperWidth = upperStepOuter - upperStepInner;
+        platform.addBox(upperX0, upperStepY - 1.0F, stepZStart, upperWidth, 1.0F, stepZLen);
+
+        final float seatX0 = sideSign < 0.0F ? -seatOuter : seatInner;
+        final float seatWidth = seatOuter - seatInner;
+        platform.addBox(seatX0, seatY - 1.0F, stepZStart, seatWidth, 1.0F, stepZLen);
+
+        // Diagonal strut -- a single tilted box from the ground near the lower step up to the upper
+        // step's own outer corner, built along local Y (height) then zRot-tilted to lean outward.
+        final float strutRun = (lowerStepOuter - 1.0F) - (upperStepOuter - 1.0F);
+        final float strutRise = lowerStepY - upperStepY;
+        final double strutSlant = Math.sqrt((double) strutRun * strutRun + (double) strutRise * strutRise);
+        final double strutTheta = Math.atan2(strutRun, strutRise);
+        final EasyMeshBuilder strut = new EasyMeshBuilder(name + "Strut", 0, 20);
+        strut.addBox(-0.5F, -(float) strutSlant, -0.5F, 1, (float) strutSlant, 1);
+        strut.setRotationPoint(sideSign * (lowerStepOuter - 1.0F), lowerStepY, platformZ);
+        // Leans the strut's own top end INWARD (toward the body) from its ground pivot, to meet the
+        // upper step's own closer-in outer edge -- same real tilt derivation #chamferPanel uses, just
+        // around Z (this element needs no yRot length-alignment at all) instead of X.
+        strut.zRot = sideSign < 0.0F ? (float) strutTheta : (float) -strutTheta;
+        platform.addChild(strut);
+
+        platform.setRotationPoint(0.0F, 0.0F, platformZ);
+        return platform;
     }
 
-    /** One continuous part (4 edge bars) sitting on top of the roof crown, matching the reference photo's visible brass luggage rail. */
-    private static EasyMeshBuilder roofRail(final String name, final float halfWidth, final float halfLength, final float thickness, final float railY, final float centerZ) {
-        final EasyMeshBuilder rail = new EasyMeshBuilder(name, 0, 54);
-        rail.setRotationPoint(0.0F, railY, centerZ);
-        rail.addBox(halfWidth - thickness, -thickness, -halfLength, thickness, thickness, halfLength * 2.0F);
-        rail.addBox(-halfWidth, -thickness, -halfLength, thickness, thickness, halfLength * 2.0F);
-        rail.addBox(-halfWidth, -thickness, -halfLength, halfWidth * 2.0F, thickness, thickness);
-        rail.addBox(-halfWidth, -thickness, halfLength - thickness, halfWidth * 2.0F, thickness, thickness);
-        return rail;
-    }
-
-    /** 4 corner + 2 mid-side finial posts standing on {@link #roofRail}, matching the reference photo's roof-rail finials. */
-    private static EasyMeshBuilder roofFinials(final String name, final float halfWidth, final float halfLength, final float topY, final float centerZ) {
-        final EasyMeshBuilder finials = new EasyMeshBuilder(name, 0, 56);
-        finials.setRotationPoint(0.0F, topY, centerZ);
-        final float finialHeight = 2.0F;
-        final float finialSize = 0.6F;
-        final float[] xs = {-halfWidth + 0.5F, halfWidth - 0.5F};
-        final float[] zs = {-halfLength + 0.5F, 0.0F, halfLength - 0.5F};
-        for (final float x : xs) {
-            for (final float z : zs) {
-                finials.addBox(x - finialSize / 2.0F, -finialHeight, z - finialSize / 2.0F, finialSize, finialHeight, finialSize);
-            }
-        }
-        return finials;
-    }
-
-    /** Mirrors {@code WagonModel#wheel}'s own doc exactly -- same real 8-spoke hub/rim pattern, same damaged-look variant, generalized 2026-10-26 to take its own {@code radius} (front/back wheels now differ -- see this class's own top-level doc). */
-    private static EasyMeshBuilder wheel(final String name, final float xOffset, final float z, final boolean brokenLook, final float radius) {
+    /** Mirrors {@code WagonModel#wheel}'s own doc exactly -- same real 8-spoke hub/rim pattern, same damaged-look variant. */
+    private static EasyMeshBuilder wheel(final String name, final float xOffset, final float z, final boolean brokenLook) {
         final EasyMeshBuilder wheel = new EasyMeshBuilder(name, 46, 60);
-        wheel.setRotationPoint(xOffset, -radius, z);
+        wheel.setRotationPoint(xOffset, WHEEL_Y, z);
         wheel.addBox(-1.0F, -1.0F, -1.0F, 2, 2, 2);
-        final float spokeLength = radius - 2.0F;
-        final float rimZ = radius - 1.14F;
+        final float spokeLength = WHEEL_RADIUS - 2.0F;
+        final float rimZ = WHEEL_RADIUS - 1.14F;
         for (int i = 0; i < 8; i++) {
             if (!(brokenLook && i == 0)) {
                 final EasyMeshBuilder rim = new EasyMeshBuilder(name + "_rim_" + i, 58, 54);

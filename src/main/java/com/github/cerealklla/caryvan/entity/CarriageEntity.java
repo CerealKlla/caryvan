@@ -832,28 +832,26 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
     // spacing, like every one of WagonEntity's own seat constants started out as before live-test
     // correction.
     private static final double SEAT_X_OFFSET = 0.34375D;
-    // Real fix, 2026-10-26: live screenshot showed the driver clipped into the front wall instead of
-    // sitting on the real frontBenchSeat. Root cause -- this constant was left at Wagon's own proven
-    // value (1.75) when the cabin was first built and never re-derived for Carriage's own, later-
-    // moved bench. The real conversion, confirmed against Wagon's own already-correct value: entity
-    // seat Z = -(the model's own frontBenchSeat box center Z, in blocks) -- Wagon's benchSeat center
-    // is -28 raw units (-1.75 blocks), and its own entity constant is exactly +1.75, a clean negation,
-    // not a fudge factor. CarriageModel's own frontBenchSeat (after the reference-photo rebuild) spans
-    // raw Z [-48,-40] (pivot frontBenchZ=-40, box depth 8), center -44 raw = -2.75 blocks -> negated,
-    // +2.75.
-    private static final double FRONT_SEAT_Z = 2.75D;
-    // Real second fix, 2026-10-26, same live-test round as FRONT_SEAT_Z above: "my head when mounted
-    // is touching the underside of the bench" -- the Z-depth fix alone wasn't enough; the generic
-    // getBbHeight()*0.85 Y fraction every seat in this class shares (tuned against the OLD, much
-    // shorter cabin) now sits WAY below the real rebuilt bench. Real value, independently duplicated
-    // from CarriageModel's own current frontBenchSeat pivot (client-only ModelPart types can't be
-    // referenced from this common-sourceset class -- same reasoning #DOOR_Z_NEAR/FAR's own doc gives):
-    // world height above feet = -(bodyOrigin + benchBaseY) / 16, where bodyOrigin = -BACK_WHEEL_RADIUS
-    // = -11 and benchBaseY = WALL_TOP_Y(-24) - riserHeight(4) = -28 -> -(-11 + -28)/16 = 2.4375. Only
-    // the front bench (seatIndex 0/1) gets this dedicated value -- the roof/running-board companion
-    // seats (seatIndex 2-5) aren't tied to this specific model prop at all and keep the shared
-    // fraction, a separate concern not reported broken here.
-    private static final double FRONT_SEAT_Y = 2.4375D;
+    // Real fix, 2026-10-26 -- superseded the same day by the scrapped-and-rebuilt driver platform
+    // below, but the underlying conversion rule stays the single source of truth for every Carriage
+    // seat constant in this class: entity world offset = -(the model's own real local coordinate,
+    // converted to blocks) -- confirmed against WagonEntity's own already-live-tested bench constant
+    // (model center -28 raw/-1.75 blocks -> entity +1.75, a clean negation, not a fudge factor).
+    //
+    // Real third rebuild, 2026-10-26: the user scrapped the whole cabin body (including the elevated
+    // coachman's-box bench this constant set used to target) for a simpler reference model -- a low
+    // 2-step SIDE platform per door, not a centered front-facing bench. Re-derived fresh against
+    // CarriageModel#driverPlatform's own real seat-cushion box: for the left platform, the cushion
+    // spans local x=[-22.2,-18.7] (center -20.45), y=[-8,-7] (center -7.5, body-local, no further
+    // offset since the platform itself has no own rotation-point Y), z=[-32.5,-22.5] (center -27.5,
+    // platformZ). Applying the same negation rule to each axis: X = -(-20.45)/16 = 1.278125; Y =
+    // -(bodyOrigin(-WHEEL_RADIUS=-10) + -7.5)/16 = -(-17.5)/16 = 1.09375; Z = -(-27.5)/16 = 1.71875.
+    // Only seatIndex 0/1 (the real front/driver bench) get these dedicated values -- the roof/
+    // running-board companion seats (seatIndex 2-5) aren't tied to this specific model prop at all
+    // and keep the original shared SEAT_X_OFFSET/getBbHeight()*0.85 fraction, same as before.
+    private static final double FRONT_SEAT_X_OFFSET = 1.278125D;
+    private static final double FRONT_SEAT_Z = 1.71875D;
+    private static final double FRONT_SEAT_Y = 1.09375D;
     private static final double INTERIOR_SEAT_1_Z = 0.0D;
     private static final double INTERIOR_SEAT_2_Z = -1.75D;
     private static final double[] SEAT_Z_BY_INDEX = {FRONT_SEAT_Z, FRONT_SEAT_Z, INTERIOR_SEAT_1_Z, INTERIOR_SEAT_1_Z, INTERIOR_SEAT_2_Z, INTERIOR_SEAT_2_Z};
@@ -889,7 +887,9 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
             seatIndex = found >= 0 ? found : 0;
         }
         final boolean leftSide = seatIndex % 2 == 0;
-        final double xOffset = leftSide ? SEAT_X_OFFSET : -SEAT_X_OFFSET;
+        final double frontOffset = leftSide ? FRONT_SEAT_X_OFFSET : -FRONT_SEAT_X_OFFSET;
+        final double sharedOffset = leftSide ? SEAT_X_OFFSET : -SEAT_X_OFFSET;
+        final double xOffset = seatIndex <= 1 ? frontOffset : sharedOffset;
         final double z = SEAT_Z_BY_INDEX[seatIndex];
         final double y = seatIndex <= 1 ? FRONT_SEAT_Y : this.getBbHeight() * 0.85D;
         final Vec3 local = new Vec3(xOffset, y, z).scale(scale);
