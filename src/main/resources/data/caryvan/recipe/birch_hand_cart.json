@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:birch_planks",
+    "minecraft:birch_planks",
+    "minecraft:birch_planks",
+    "minecraft:birch_planks",
+    "minecraft:birch_planks"
+  ],
+  "result": {
+    "id": "caryvan:birch_hand_cart"
+  }
+}

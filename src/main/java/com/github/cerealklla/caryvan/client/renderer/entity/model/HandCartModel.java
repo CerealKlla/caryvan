@@ -35,8 +35,12 @@ public final class HandCartModel extends EntityModel<HandCartRenderState> {
 
     public HandCartModel(final ModelPart root) {
         super(root, RenderTypes::entityCutout);
-        this.leftWheel = root.getChild("leftWheel");
-        this.rightWheel = root.getChild("rightWheel");
+        // EasyMeshBuilder#rootLayer attaches the builder passed to it as a child part named "root"
+        // rather than merging its children directly into the baked mesh's own top-level part, so
+        // leftWheel/rightWheel sit one level deeper than the baked root passed in here.
+        final ModelPart wheels = root.getChild("root");
+        this.leftWheel = wheels.getChild("leftWheel");
+        this.rightWheel = wheels.getChild("rightWheel");
     }
 
     @Override

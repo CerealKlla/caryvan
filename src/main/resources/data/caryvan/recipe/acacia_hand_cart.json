@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:acacia_planks",
+    "minecraft:acacia_planks",
+    "minecraft:acacia_planks",
+    "minecraft:acacia_planks",
+    "minecraft:acacia_planks"
+  ],
+  "result": {
+    "id": "caryvan:acacia_hand_cart"
+  }
+}

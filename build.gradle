@@ -93,6 +93,11 @@ dependencies {
     // Settlemynts already use for their own Dev Kyt contributions.
     compileOnly files("../Kyt/build/libs/kyt-${kyt_version}.jar")
 
+    // Lyfe is an optional soft dependency (see neoforge.mods.toml) -- Phase 2's animal-drawn carts
+    // reuse Lyfe's Summoning Stone companion-upkeep mechanic (see bridge.LyfeSummoningBridge),
+    // gated behind ModList.get().isLoaded("lyfe") at runtime, same isolation pattern as Kyt above.
+    compileOnly files("../Lyfe/build/libs/lyfe-${lyfe_version}.jar")
+
     // Plain JUnit 5 for pure logic tests (no live server/registry needed, so ModDevGradle's
     // neoForge { unitTest {} } FML-bootstrap machinery isn't required for those).
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'

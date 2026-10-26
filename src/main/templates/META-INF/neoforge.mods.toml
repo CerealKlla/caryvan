@@ -44,3 +44,13 @@ cargo and passengers. See context/design-document.md for the full design.
     reason="Contributes Caryvan's Hand Cart debug item into Kyt's mod-managed Dev Kyt."
     ordering="AFTER"
     side="BOTH"
+
+# Optional -- Phase 2's animal-drawn carts reuse Lyfe's Summoning Stone companion-upkeep mechanic
+# for their mount slot(s). A Lyfe-less server just leaves every mount slot permanently unfillable
+# (see context/design-document.md Section 5's own note); Hand Cart (Phase 1) is unaffected either way.
+[[dependencies.${mod_id}]]
+    modId="lyfe"
+    type="optional"
+    reason="Animal-drawn carts summon their mount(s) via Lyfe's Summoning Stone mechanic."
+    ordering="AFTER"
+    side="BOTH"

@@ -3,10 +3,17 @@ package com.github.cerealklla.caryvan;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import com.github.cerealklla.caryvan.client.ModModelLayers;
+import com.github.cerealklla.caryvan.client.renderer.entity.AnimalCartRenderer;
 import com.github.cerealklla.caryvan.client.renderer.entity.HandCartRenderer;
+import com.github.cerealklla.caryvan.client.renderer.entity.WagonRenderer;
+import com.github.cerealklla.caryvan.client.renderer.entity.model.AnimalCartModel;
 import com.github.cerealklla.caryvan.client.renderer.entity.model.HandCartModel;
+import com.github.cerealklla.caryvan.client.renderer.entity.model.WagonModel;
+import com.github.cerealklla.caryvan.menu.client.AnimalCartScreen;
+import com.github.cerealklla.caryvan.menu.client.WagonScreen;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModEntities;
+import com.github.cerealklla.caryvan.registration.ModMenus;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -20,6 +27,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import org.lwjgl.glfw.GLFW;
 
 // This class will not load on dedicated servers. Accessing client side code from here is safe --
@@ -47,11 +55,21 @@ public class CaryvanModClient {
     @SubscribeEvent
     static void onRegisterLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
         event.registerLayerDefinition(ModModelLayers.HAND_CART, HandCartModel::createLayer);
+        event.registerLayerDefinition(ModModelLayers.ANIMAL_CART, AnimalCartModel::createLayer);
+        event.registerLayerDefinition(ModModelLayers.WAGON, WagonModel::createLayer);
     }
 
     @SubscribeEvent
     static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.HAND_CART.get(), HandCartRenderer::new);
+        event.registerEntityRenderer(ModEntities.ANIMAL_CART.get(), AnimalCartRenderer::new);
+        event.registerEntityRenderer(ModEntities.WAGON.get(), WagonRenderer::new);
+    }
+
+    @SubscribeEvent
+    static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenus.ANIMAL_CART.get(), AnimalCartScreen::new);
+        event.register(ModMenus.WAGON.get(), WagonScreen::new);
     }
 
     @SubscribeEvent

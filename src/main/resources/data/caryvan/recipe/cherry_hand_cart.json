@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:cherry_planks",
+    "minecraft:cherry_planks",
+    "minecraft:cherry_planks",
+    "minecraft:cherry_planks",
+    "minecraft:cherry_planks"
+  ],
+  "result": {
+    "id": "caryvan:cherry_hand_cart"
+  }
+}

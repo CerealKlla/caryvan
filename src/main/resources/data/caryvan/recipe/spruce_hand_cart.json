@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:spruce_planks",
+    "minecraft:spruce_planks",
+    "minecraft:spruce_planks",
+    "minecraft:spruce_planks",
+    "minecraft:spruce_planks"
+  ],
+  "result": {
+    "id": "caryvan:spruce_hand_cart"
+  }
+}

@@ -47,17 +47,31 @@ public final class CaryvanWorld {
         }
     }
 
-    /** Called once per server tick (see {@code CaryvanMod}'s tick listener) -- advances every currently-pulled drawn entity, dropping any whose puller is gone. */
+    /**
+     * Called once per server tick (see {@code CaryvanMod}'s tick listener) -- advances every
+     * currently-pulled drawn entity, dropping any whose puller is gone.
+     *
+     * <p>Real crash, 2026-10-25 ({@code ConcurrentModificationException} at the {@code removeIf}
+     * this replaced): {@link AbstractDrawnEntity#pulledTick()}/{@code #shouldStopPulledTick()} can
+     * themselves call {@link #setPulling} (shift-dismount, exceeding {@code MAX_SLACK_BLOCKS}, a
+     * wall between puller and cart), which directly mutates this same {@link #pulling} map -- doing
+     * that from inside a live {@code removeIf} iteration over that same map is exactly what
+     * {@code ConcurrentModificationException} exists to catch. Iterating a snapshot instead means
+     * any such nested mutation lands on the real map safely, outside the iteration entirely.
+     */
     public void tick() {
-        this.pulling.entrySet().removeIf(entry -> {
-            final AbstractDrawnEntity cart = entry.getValue();
+        for (final AbstractDrawnEntity cart : new java.util.ArrayList<>(this.pulling.values())) {
             if (cart.shouldStopPulledTick()) {
-                return true;
+                // shouldStopPulledTick()'s "puller is dead/gone" branch clears the cart's own
+                // #pulling field directly (not via #setPulling), so it never mutates this map on
+                // its own -- do that cleanup here instead. A no-op if setPulling() already removed
+                // it (e.g. the "wall between puller and cart" branch, which does call setPulling()).
+                this.pulling.values().remove(cart);
+                continue;
             }
             if (!(cart.getPulling() instanceof AbstractDrawnEntity)) {
                 cart.pulledTick();
             }
-            return false;
-        });
+        }
     }
 }

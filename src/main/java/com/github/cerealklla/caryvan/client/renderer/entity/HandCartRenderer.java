@@ -10,20 +10,28 @@ import com.mojang.math.Axis;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.state.properties.WoodType;
+
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * {@link HandCartEntity}'s real client renderer -- replaces the earlier placeholder floating-chest
  * icon (see this repo's own CLAUDE.md/decisions.md, 2026-10-25) with {@link HandCartModel}'s actual
  * geometry, adapted from NiftyCarts (MIT licensed, see this repo's own CLAUDE.md for the full
- * attribution writeup).
+ * attribution writeup). One baked texture per {@link WoodType} (2026-10-25, "add variants to
+ * respect the wood species used when crafting") -- picked per-entity via {@link HandCartRenderState#woodType}.
  */
 public final class HandCartRenderer extends EntityRenderer<HandCartEntity, HandCartRenderState> {
 
-    private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/hand_cart.png");
+    private static final Map<String, Identifier> TEXTURES = WoodType.values()
+            .collect(Collectors.toMap(WoodType::name,
+                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/hand_cart_" + type.name() + ".png")));
 
     private final HandCartModel model;
 
@@ -42,11 +50,13 @@ public final class HandCartRenderer extends EntityRenderer<HandCartEntity, HandC
     public void extractRenderState(final HandCartEntity entity, final HandCartRenderState state, final float partialTicks) {
         super.extractRenderState(entity, state, partialTicks);
         state.yRot = Mth.rotLerp(partialTicks, entity.yRotO, entity.getYRot());
+        entity.tickWheelsClient();
         state.wheelRotationRight = (float) entity.getWheelRotation(0);
         state.wheelRotationLeft = (float) entity.getWheelRotation(1);
         state.hurtTime = entity.getHurtTime() - partialTicks;
         state.damageTaken = entity.getDamage();
         state.forwardDirection = entity.getHurtDir();
+        state.woodType = entity.getWoodType().name();
     }
 
     @Override
@@ -55,7 +65,10 @@ public final class HandCartRenderer extends EntityRenderer<HandCartEntity, HandC
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - state.yRot));
         poseStack.scale(-1.0F, -1.0F, 1.0F);
         this.model.setupAnim(state);
-        submitNodeCollector.submitModel(this.model, state, poseStack, TEXTURE, state.lightCoords, OverlayTexture.NO_OVERLAY, -1, null);
+        final Identifier texture = TEXTURES.getOrDefault(state.woodType, TEXTURES.get(WoodType.OAK.name()));
+        final RenderType renderType = this.model.renderType(texture);
+        submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,
+                OverlayTexture.NO_OVERLAY, -1, null, state.outlineColor, null);
         poseStack.popPose();
         super.submit(state, poseStack, submitNodeCollector, camera);
     }

@@ -1,8 +1,13 @@
 package com.github.cerealklla.caryvan;
 
+import com.github.cerealklla.caryvan.interaction.CartMountDeathListener;
+import com.github.cerealklla.caryvan.interaction.CartMountDebugListener;
+import com.github.cerealklla.caryvan.interaction.CartMountInteractionListener;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
+import com.github.cerealklla.caryvan.registration.ModAttachments;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 import com.github.cerealklla.caryvan.registration.ModItems;
+import com.github.cerealklla.caryvan.registration.ModMenus;
 import com.github.cerealklla.caryvan.util.CaryvanWorld;
 
 import net.minecraft.server.level.ServerLevel;
@@ -31,18 +36,39 @@ public class CaryvanMod {
     public CaryvanMod(IEventBus modEventBus, ModContainer modContainer) {
         ModEntities.ENTITIES.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
+        ModMenus.MENU_TYPES.register(modEventBus);
+        ModAttachments.ATTACHMENT_TYPES.register(modEventBus);
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::registerPayloads);
 
         NeoForge.EVENT_BUS.addListener(this::onServerTick);
+        // Real user request, 2026-10-25: "I think once you disable being able to ride the horses
+        // individually in a team-style wagon we won't have that possibility of a problem anymore"
+        // (a player manually riding a team mount away, then dismounting, could strand it beyond
+        // vanilla's own real leash-snap distance -- see entity.WagonEntity's own doc).
+        NeoForge.EVENT_BUS.register(new CartMountInteractionListener());
+        // Temporary diagnostic logging, 2026-10-25 -- see that class's own doc. Delete once the
+        // real "horses went invulnerable mid-session" mechanism is confirmed and fixed for good.
+        NeoForge.EVENT_BUS.register(new CartMountDebugListener());
+        // Real user report, 2026-10-25: "it did drop 'free' leads when the horse died which it
+        // should not do." See that class's own doc for the full real-bytecode-traced root cause.
+        NeoForge.EVENT_BUS.register(new CartMountDeathListener());
 
         // Replaces manually crafting/finding a Hand Cart while testing -- contributed into Kyt's
         // mod-managed "Dev" Kyt (/kyt getDev), same pattern Blueprynts/Settlemynts already use for
-        // their own debug items. 2026-10-25, explicit user request.
+        // their own debug items. 2026-10-25, explicit user request. Animal Cart added the same day,
+        // once Phase 2's first slice shipped; Wagon added the same day too, once the 2-horse slice
+        // shipped -- see Lyfe's own LyfeMod for the matching ready-bound Summoning Stone
+        // contribution (now granting two stones, not one) this needs to actually be testable.
         if (ModList.get().isLoaded("kyt")) {
+            // Oak specifically -- an arbitrary but reasonable default now that all three carts come
+            // in 12 wood-species variants each (Wagon joined 2026-10-26) instead of one flat item.
             com.github.cerealklla.kyt.api.Kyt.registerDevKytContribution(() ->
-                    java.util.List.of(new ItemStack(ModItems.HAND_CART.get())));
+                    java.util.List.of(
+                            new ItemStack(ModItems.handCartFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
+                            new ItemStack(ModItems.animalCartFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
+                            new ItemStack(ModItems.wagonFor(net.minecraft.world.level.block.state.properties.WoodType.OAK))));
         }
     }
 

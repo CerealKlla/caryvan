@@ -14,6 +14,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.properties.WoodType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -25,11 +26,19 @@ import java.util.List;
  * Places a {@link com.github.cerealklla.caryvan.entity.HandCartEntity} where the player is looking
  * (a raycast against both blocks and entities, so you can't place one through another entity's own
  * hitbox) -- adapted from NiftyCarts' {@code CartItem} (MIT licensed, see this repo's own CLAUDE.md).
+ *
+ * <p>One instance per {@link WoodType} is registered ({@link com.github.cerealklla.caryvan.registration.ModItems})
+ * so the placed entity's own texture matches the planks it was crafted from -- explicit user
+ * request, 2026-10-25 ("is it possible to add variants to respect the wood species used when
+ * crafting?" -> "All vanilla plank types").
  */
 public final class HandCartItem extends Item {
 
-    public HandCartItem(final Properties properties) {
+    private final WoodType woodType;
+
+    public HandCartItem(final Properties properties, final WoodType woodType) {
         super(properties);
+        this.woodType = woodType;
     }
 
     @Override
@@ -69,6 +78,7 @@ public final class HandCartItem extends Item {
             return InteractionResult.FAIL;
         }
 
+        ((com.github.cerealklla.caryvan.entity.AbstractDrawnEntity) cart).setWoodType(this.woodType);
         level.addFreshEntity(cart);
         // Reuses a vanilla sound -- no real custom audio authored yet, same "functional first,
         // no art exists" precedent used elsewhere in this suite (see HandCartRenderer's own doc).

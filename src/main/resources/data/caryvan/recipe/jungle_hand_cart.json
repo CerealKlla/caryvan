@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:jungle_planks",
+    "minecraft:jungle_planks",
+    "minecraft:jungle_planks",
+    "minecraft:jungle_planks",
+    "minecraft:jungle_planks"
+  ],
+  "result": {
+    "id": "caryvan:jungle_hand_cart"
+  }
+}

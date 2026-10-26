@@ -20,4 +20,10 @@ public final class ModModelLayers {
 
     public static final ModelLayerLocation HAND_CART =
             new ModelLayerLocation(Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "hand_cart"), "main");
+
+    public static final ModelLayerLocation ANIMAL_CART =
+            new ModelLayerLocation(Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "animal_cart"), "main");
+
+    public static final ModelLayerLocation WAGON =
+            new ModelLayerLocation(Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "wagon"), "main");
 }

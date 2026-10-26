@@ -16,4 +16,5 @@ public final class HandCartRenderState extends EntityRenderState {
     public float hurtTime;
     public float damageTaken;
     public int forwardDirection = 1;
+    public String woodType = "oak";
 }

@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:oak_planks",
+    "minecraft:oak_planks",
+    "minecraft:oak_planks",
+    "minecraft:oak_planks",
+    "minecraft:oak_planks"
+  ],
+  "result": {
+    "id": "caryvan:oak_hand_cart"
+  }
+}

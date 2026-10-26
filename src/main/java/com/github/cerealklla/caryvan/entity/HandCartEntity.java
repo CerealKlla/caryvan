@@ -23,9 +23,11 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p><b>Hitch interaction reworked 2026-10-25, explicit user correction</b> -- "same as horses/
  * chairs: right click toggles, left shift auto dismounts," replacing an earlier dedicated keybind
- * (deleted along with {@code network.ActionKeyPayload}). A plain right-click toggles hitch/unhitch
- * (see {@link AbstractDrawnEntity#tryToggleHitch}); sneak+right-click opens the cargo inventory
- * instead, the same split {@code AbstractChestBoat} itself uses (board vs. open storage).
+ * (deleted along with {@code network.ActionKeyPayload}). Originally a plain right-click toggled
+ * hitch/unhitch and sneak+right-click opened cargo (mirroring {@code AbstractChestBoat}'s own
+ * board-vs-open-storage split) -- **flipped the same day per explicit follow-up request**: a plain
+ * right-click now opens the cargo inventory (see {@link #createMenu}), sneak+right-click toggles
+ * hitch/unhitch instead (see {@link AbstractDrawnEntity#tryToggleHitch}).
  */
 public final class HandCartEntity extends AbstractDrawnInventoryEntity {
 
@@ -43,7 +45,7 @@ public final class HandCartEntity extends AbstractDrawnInventoryEntity {
 
     @Override
     public Item getCartItem() {
-        return ModItems.HAND_CART.get();
+        return ModItems.handCartFor(this.getWoodType());
     }
 
     /** Only a player's own right-click can hitch it -- no animal AI exists to make anything else want to grab one. */
@@ -52,9 +54,15 @@ public final class HandCartEntity extends AbstractDrawnInventoryEntity {
         return entity instanceof Player && super.canBePulledBy(entity);
     }
 
+    /** The one deliberate exception to {@link AbstractDrawnEntity}'s own "never detach" default -- see that method's own doc. */
+    @Override
+    protected boolean canDetachFromPuller() {
+        return true;
+    }
+
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
-        if (player.isShiftKeyDown()) {
+        if (!player.isShiftKeyDown()) {
             return super.interact(player, hand, location);
         }
         final InteractionResult result = tryToggleHitch(player);

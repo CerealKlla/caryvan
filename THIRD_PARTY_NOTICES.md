@@ -39,6 +39,33 @@ NiftyCarts is itself a Fabric port of **AstikorCarts** by MennoMax
 (https://github.com/MennoMax/astikor-carts, also MIT licensed), which the above code is
 originally descended from.
 
+Separately, Animal Cart's real 3D model geometry (`client/renderer/entity/model/AnimalCartModel`)
+and its item icon (`textures/item/animal_cart.png`) are adapted directly from **AstikorCarts'**
+own `AnimalCartModel`/`CartModel` and `textures/items/animal_cart.png` -- NiftyCarts itself dropped
+the original "Animal Cart" concept in favor of its own different cart types (Hand Cart, Wagon, Seed
+Drill, Reaper), so this is the first content this project has copied directly from AstikorCarts
+itself rather than through NiftyCarts, same MIT license as above (same repository link). Box
+dimensions/UV offsets are copied as-is (real physical geometry, not anything API-version-specific);
+`textures/entity/animal_cart.png` reuses only the UV layout, not AstikorCarts' own runtime-
+assembled-texture pixel art (that system, `AssembledTexture`/`AssembledTextureFactory`/`Fill`/
+`Material`, was deliberately not ported -- a static baked PNG ships instead, same simplification
+Hand Cart's own texture already made).
+
+Separately, Wagon's item icon (`textures/item/wagon.png`) is adopted directly from **NiftyCarts'**
+own `oak_wagon.png` (NiftyCarts has a real "Wagon" cart type of its own, with per-wood icons) --
+same MIT license/repository as above. Wagon's 3D model geometry (`client/renderer/entity/model/
+WagonModel`) started as an original, deliberately simple placeholder (box bed + flat square wheels,
+no spokes), explicit user scoping 2026-10-25; its real-geometry pass, same day, is loosely informed
+by **NiftyCarts'** own real `WagonModel`/`CartModel` (same MIT license/repository as above, pulled
+directly from the repo before writing any of this) for the open-bed/wall/axle shape specifically
+(corner posts, rail-built side walls, real axles) -- NiftyCarts' own Wagon is a full covered wagon
+with a furl-able canvas roof and three separately-lidded internal chests, neither of which this
+project's `WagonEntity` has any mechanic for, so only the structural bed/wall/axle shape was
+adapted, not ported wholesale; the wheel geometry itself reuses this project's own existing
+Animal-Cart wheel pattern (already attributed above, ultimately from AstikorCarts) scaled down,
+rather than NiftyCarts' own wheel code. The driving bench is this project's own original addition,
+with no equivalent in either reference mod (NiftyCarts' Wagon isn't drivable at all).
+
 None of this project's code is copied verbatim -- every adapted class was reworked against this
 environment's current Minecraft/NeoForge entity API (see each class's own doc comment for the
 specific differences: no manual position-lerp code, `VehicleEntity` as the base instead of plain
