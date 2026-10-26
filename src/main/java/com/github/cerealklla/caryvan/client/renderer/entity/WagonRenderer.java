@@ -135,7 +135,11 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
     // Real live-test feedback, 2026-10-26: at 0 HP "the wagon stays upright" and reads as
     // underwhelming -- a visible list/tilt to one side, on top of the full grey texture and the
     // now-missing wheel geometry, reads much more clearly as "broken down," not just "repainted."
-    private static final float BROKEN_TILT_DEGREES = 12.0F;
+    // Real live-test fix, 2026-10-26: now the single source of truth lives on WagonModel itself
+    // (public there), since its own setupAnim needs the identical value for real positional-
+    // compensation math (see that class's own doc) -- referenced from here instead of duplicated,
+    // so the two can never drift apart.
+    private static final float BROKEN_TILT_DEGREES = com.github.cerealklla.caryvan.client.renderer.entity.model.WagonModel.BROKEN_TILT_DEGREES;
 
     @Override
     public void submit(final WagonRenderState state, final PoseStack poseStack, final SubmitNodeCollector submitNodeCollector, final CameraRenderState camera) {

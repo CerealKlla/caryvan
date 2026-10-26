@@ -20,12 +20,25 @@ import net.minecraft.util.Mth;
  * track while the body box itself stayed a fixed width (a pre-existing Wagon quirk, not touched
  * here), this model reuses {@link #TRACK_SCALE} for the body's own X-axis dimensions too, so a wider
  * wheel track actually corresponds to a visually wider body.
+ *
+ * <p><b>Real wheel-break geometry + positional tilt fix, 2026-10-26</b> -- mirrors
+ * {@link WagonModel}'s own doc exactly (same live-test reports applied to both cart types at once):
+ * each wheel position now bakes a damaged-look variant (missing rim wedge/spoke, two snapped-stub
+ * spokes) toggled by {@code state.wheelBroken[i]}, and the grounded-side wheels/fallen-debris pieces
+ * are dynamically position/orientation-compensated in {@link #setupAnim} so they stay visually
+ * planted on the ground instead of floating with the shared body tilt. See {@link WagonModel}'s own
+ * doc for the full real derivation (confirmed against {@code com.mojang.math.Axis}'s own source) --
+ * identical reasoning, just applied to this model's own geometry/constants.
  */
 public final class CarriageModel extends EntityModel<CarriageRenderState> {
 
     // Same real wheel size as Wagon/Animal Cart -- "appropriate wheels" (real user spec) means
     // correctly-textured and proportioned, not smaller/mismatched.
     private static final float WHEEL_RADIUS = 11.0F;
+    private static final float WHEEL_Y = -WHEEL_RADIUS;
+
+    /** Mirrors {@code CarriageRenderer}'s own identical constant -- see {@code WagonModel#BROKEN_TILT_DEGREES}'s own doc for why the single source of truth lives on the Model class. */
+    public static final float BROKEN_TILT_DEGREES = 12.0F;
 
     // Bigger than WagonModel's own 1.5/1.1 -- real user spec, "a little longer and wider... to fit 4
     // inside comfortably." Untested placeholder, like every one of WagonModel's own scale constants
@@ -39,60 +52,116 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     // same day: "widen another 10% across the width" -- 1.05 * 1.10 = 1.155.
     private static final float WHEEL_TRACK_EXTRA_SCALE = 1.155F;
 
-    private final ModelPart leftWheelFront;
-    private final ModelPart rightWheelFront;
-    private final ModelPart leftWheelBack;
-    private final ModelPart rightWheelBack;
+    private static final float WHEEL_TRACK_X = 14.0F * TRACK_SCALE * WHEEL_TRACK_EXTRA_SCALE;
+    private static final float WHEEL_FRONT_Z = -10.0F * LENGTH_SCALE;
+    private static final float WHEEL_BACK_Z = 10.0F * LENGTH_SCALE;
+
+    private static final float[] GROUNDED_COMPENSATED = compensateForTilt(-WHEEL_TRACK_X, WHEEL_Y);
+    private static final float GROUNDED_COUNTER_ZROT = (float) -Math.toRadians(BROKEN_TILT_DEGREES);
+
+    private static final float FALLEN_TARGET_X = WHEEL_TRACK_X + 6.0F;
+    private static final float FALLEN_TARGET_Y = -2.0F;
+    private static final float[] FALLEN_COMPENSATED = compensateForTilt(FALLEN_TARGET_X, FALLEN_TARGET_Y);
+    private static final float FALLEN_WORLD_ZROT_DEGREES = 55.0F;
+    private static final float FALLEN_LOCAL_ZROT = (float) (Math.toRadians(FALLEN_WORLD_ZROT_DEGREES) - Math.toRadians(BROKEN_TILT_DEGREES));
+
+    private final ModelPart leftWheelFrontNormal;
+    private final ModelPart leftWheelFrontBroken;
+    private final ModelPart rightWheelFrontNormal;
+    private final ModelPart rightWheelFrontBroken;
+    private final ModelPart leftWheelBackNormal;
+    private final ModelPart leftWheelBackBroken;
+    private final ModelPart rightWheelBackNormal;
+    private final ModelPart rightWheelBackBroken;
     private final ModelPart fallenWheelFront;
     private final ModelPart fallenWheelBack;
 
     public CarriageModel(final ModelPart root) {
         super(root, RenderTypes::entityCutout);
         final ModelPart parts = root.getChild("root");
-        this.leftWheelFront = parts.getChild("leftWheelFront");
-        this.rightWheelFront = parts.getChild("rightWheelFront");
-        this.leftWheelBack = parts.getChild("leftWheelBack");
-        this.rightWheelBack = parts.getChild("rightWheelBack");
+        this.leftWheelFrontNormal = parts.getChild("leftWheelFrontNormal");
+        this.leftWheelFrontBroken = parts.getChild("leftWheelFrontBroken");
+        this.rightWheelFrontNormal = parts.getChild("rightWheelFrontNormal");
+        this.rightWheelFrontBroken = parts.getChild("rightWheelFrontBroken");
+        this.leftWheelBackNormal = parts.getChild("leftWheelBackNormal");
+        this.leftWheelBackBroken = parts.getChild("leftWheelBackBroken");
+        this.rightWheelBackNormal = parts.getChild("rightWheelBackNormal");
+        this.rightWheelBackBroken = parts.getChild("rightWheelBackBroken");
         this.fallenWheelFront = parts.getChild("fallenWheelFront");
         this.fallenWheelBack = parts.getChild("fallenWheelBack");
     }
 
+    /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly. */
     @Override
-    /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly -- 4 independent wheels, same index order, always geometrically present/attached regardless of broken state, plus the fallen-wheel pair shown only while broken. */
     public void setupAnim(final CarriageRenderState state) {
-        this.leftWheelFront.xRot = state.wheelRotation[0];
-        this.rightWheelFront.xRot = state.wheelRotation[1];
-        this.leftWheelBack.xRot = state.wheelRotation[2];
-        this.rightWheelBack.xRot = state.wheelRotation[3];
-        this.fallenWheelFront.visible = state.broken;
-        this.fallenWheelBack.visible = state.broken;
+        final boolean fullyBroken = state.broken;
+        applyWheelPair(this.leftWheelFrontNormal, this.leftWheelFrontBroken, state.wheelRotation[0], state.wheelBroken[0], fullyBroken, false, WHEEL_TRACK_X);
+        applyWheelPair(this.rightWheelFrontNormal, this.rightWheelFrontBroken, state.wheelRotation[1], state.wheelBroken[1], fullyBroken, true, -WHEEL_TRACK_X);
+        applyWheelPair(this.leftWheelBackNormal, this.leftWheelBackBroken, state.wheelRotation[2], state.wheelBroken[2], fullyBroken, false, WHEEL_TRACK_X);
+        applyWheelPair(this.rightWheelBackNormal, this.rightWheelBackBroken, state.wheelRotation[3], state.wheelBroken[3], fullyBroken, true, -WHEEL_TRACK_X);
+
+        this.fallenWheelFront.visible = fullyBroken;
+        this.fallenWheelBack.visible = fullyBroken;
+        if (fullyBroken) {
+            this.fallenWheelFront.x = FALLEN_COMPENSATED[0];
+            this.fallenWheelFront.y = FALLEN_COMPENSATED[1];
+            this.fallenWheelFront.zRot = FALLEN_LOCAL_ZROT;
+            this.fallenWheelBack.x = FALLEN_COMPENSATED[0];
+            this.fallenWheelBack.y = FALLEN_COMPENSATED[1];
+            this.fallenWheelBack.zRot = FALLEN_LOCAL_ZROT;
+        }
+    }
+
+    /** Mirrors {@code WagonModel#applyWheelPair}'s own doc exactly. */
+    private static void applyWheelPair(final ModelPart normal, final ModelPart broken, final float rotation,
+            final boolean wheelBroken, final boolean fullyBroken, final boolean grounded, final float bakedX) {
+        normal.xRot = rotation;
+        broken.xRot = rotation;
+        normal.x = bakedX;
+        normal.y = WHEEL_Y;
+        normal.zRot = 0.0F;
+        if (fullyBroken && grounded) {
+            normal.visible = false;
+            broken.visible = true;
+            broken.x = GROUNDED_COMPENSATED[0];
+            broken.y = GROUNDED_COMPENSATED[1];
+            broken.zRot = GROUNDED_COUNTER_ZROT;
+        } else if (fullyBroken) {
+            normal.visible = false;
+            broken.visible = false;
+        } else {
+            broken.x = bakedX;
+            broken.y = WHEEL_Y;
+            broken.zRot = 0.0F;
+            normal.visible = !wheelBroken;
+            broken.visible = wheelBroken;
+        }
+    }
+
+    /** Mirrors {@code WagonModel#compensateForTilt}'s own doc exactly. */
+    private static float[] compensateForTilt(final float targetX, final float targetY) {
+        final double theta = Math.toRadians(BROKEN_TILT_DEGREES);
+        final double cos = Math.cos(theta);
+        final double sin = Math.sin(theta);
+        return new float[] {(float) (targetX * cos + targetY * sin), (float) (-targetX * sin + targetY * cos)};
     }
 
     public static LayerDefinition createLayer() {
         final EasyMeshBuilder root = new EasyMeshBuilder("root");
 
-        final float xOffset = 14.0F * TRACK_SCALE * WHEEL_TRACK_EXTRA_SCALE;
-        final float frontZ = -10.0F * LENGTH_SCALE;
-        final float backZ = 10.0F * LENGTH_SCALE;
+        root.addChild(wheel("leftWheelFrontNormal", WHEEL_TRACK_X, WHEEL_FRONT_Z, false));
+        root.addChild(wheel("leftWheelFrontBroken", WHEEL_TRACK_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("rightWheelFrontNormal", -WHEEL_TRACK_X, WHEEL_FRONT_Z, false));
+        root.addChild(wheel("rightWheelFrontBroken", -WHEEL_TRACK_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("leftWheelBackNormal", WHEEL_TRACK_X, WHEEL_BACK_Z, false));
+        root.addChild(wheel("leftWheelBackBroken", WHEEL_TRACK_X, WHEEL_BACK_Z, true));
+        root.addChild(wheel("rightWheelBackNormal", -WHEEL_TRACK_X, WHEEL_BACK_Z, false));
+        root.addChild(wheel("rightWheelBackBroken", -WHEEL_TRACK_X, WHEEL_BACK_Z, true));
 
-        root.addChild(wheel("leftWheelFront", xOffset, frontZ));
-        root.addChild(wheel("rightWheelFront", -xOffset, frontZ));
-        root.addChild(wheel("leftWheelBack", xOffset, backZ));
-        root.addChild(wheel("rightWheelBack", -xOffset, backZ));
-
-        // Mirrors WagonModel's own doc exactly -- real live-test polish request, "add 2 broken wheels
-        // visibly lying on the ground next to the wagon" when fully Broken.
-        final float fallenWheelX = xOffset + 6.0F;
-        final float fallenWheelY = -2.0F;
-        final EasyMeshBuilder fallenWheelFront = wheel("fallenWheelFront", fallenWheelX, frontZ);
-        fallenWheelFront.setRotationPoint(fallenWheelX, fallenWheelY, frontZ);
-        fallenWheelFront.zRot = Mth.PI / 2.0F;
-        root.addChild(fallenWheelFront);
-
-        final EasyMeshBuilder fallenWheelBack = wheel("fallenWheelBack", fallenWheelX, backZ);
-        fallenWheelBack.setRotationPoint(fallenWheelX, fallenWheelY, backZ);
-        fallenWheelBack.zRot = Mth.PI / 2.0F;
-        root.addChild(fallenWheelBack);
+        // Mirrors WagonModel's own doc exactly -- fallen debris always built with the damaged-look
+        // geometry; baked position is irrelevant, #setupAnim always overrides x/y/zRot dynamically.
+        root.addChild(wheel("fallenWheelFront", FALLEN_TARGET_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("fallenWheelBack", FALLEN_TARGET_X, WHEEL_BACK_Z, true));
 
         final EasyMeshBuilder body = new EasyMeshBuilder("body");
         body.setRotationPoint(0.0F, -WHEEL_RADIUS, 0.0F);
@@ -103,12 +172,12 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         base.yRot = -Mth.PI / 2.0F;
 
         final EasyMeshBuilder axleFront = new EasyMeshBuilder("axleFront", 0, 20);
-        axleFront.addBox(-xOffset, -1.0F, -1.0F, xOffset * 2.0F, 2, 2);
-        axleFront.setRotationPoint(0.0F, 0.0F, frontZ);
+        axleFront.addBox(-WHEEL_TRACK_X, -1.0F, -1.0F, WHEEL_TRACK_X * 2.0F, 2, 2);
+        axleFront.setRotationPoint(0.0F, 0.0F, WHEEL_FRONT_Z);
 
         final EasyMeshBuilder axleBack = new EasyMeshBuilder("axleBack", 0, 20);
-        axleBack.addBox(-xOffset, -1.0F, -1.0F, xOffset * 2.0F, 2, 2);
-        axleBack.setRotationPoint(0.0F, 0.0F, backZ);
+        axleBack.addBox(-WHEEL_TRACK_X, -1.0F, -1.0F, WHEEL_TRACK_X * 2.0F, 2, 2);
+        axleBack.setRotationPoint(0.0F, 0.0F, WHEEL_BACK_Z);
 
         final float postHeight = 8.0F;
         final float postFrontZ = -15.0F * LENGTH_SCALE;
@@ -213,19 +282,24 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         return rail;
     }
 
-    /** Same real 8-spoke hub/rim pattern as {@code AnimalCartModel}/{@code WagonModel}'s own wheel -- copied verbatim, same {@code texOffs}/box dims, so the existing wheel-rim-iron texture treatment transfers unchanged. */
-    private static EasyMeshBuilder wheel(final String name, final float xOffset, final float z) {
+    /** Mirrors {@code WagonModel#wheel}'s own doc exactly -- same real 8-spoke hub/rim pattern, same damaged-look variant. */
+    private static EasyMeshBuilder wheel(final String name, final float xOffset, final float z, final boolean brokenLook) {
         final EasyMeshBuilder wheel = new EasyMeshBuilder(name, 46, 60);
-        wheel.setRotationPoint(xOffset, -WHEEL_RADIUS, z);
+        wheel.setRotationPoint(xOffset, WHEEL_Y, z);
         wheel.addBox(-1.0F, -1.0F, -1.0F, 2, 2, 2);
         for (int i = 0; i < 8; i++) {
-            final EasyMeshBuilder rim = new EasyMeshBuilder(name + "_rim_" + i, 58, 54);
-            rim.addBox(-1.0F, -4.5F, 9.86F, 2, 9, 1);
-            rim.xRot = i * Mth.PI / 4.0F;
-            wheel.addChild(rim);
-
+            if (!(brokenLook && i == 0)) {
+                final EasyMeshBuilder rim = new EasyMeshBuilder(name + "_rim_" + i, 58, 54);
+                rim.addBox(-1.0F, -4.5F, 9.86F, 2, 9, 1);
+                rim.xRot = i * Mth.PI / 4.0F;
+                wheel.addChild(rim);
+            }
+            if (brokenLook && i == 0) {
+                continue;
+            }
+            final boolean snappedSpoke = brokenLook && (i == 1 || i == 2);
             final EasyMeshBuilder spoke = new EasyMeshBuilder(name + "_spoke_" + i, 54, 54);
-            spoke.addBox(-0.5F, 1.0F, -0.5F, 1, 9, 1);
+            spoke.addBox(-0.5F, 1.0F, -0.5F, 1, snappedSpoke ? 4 : 9, 1);
             spoke.xRot = i * Mth.PI / 4.0F;
             wheel.addChild(spoke);
         }

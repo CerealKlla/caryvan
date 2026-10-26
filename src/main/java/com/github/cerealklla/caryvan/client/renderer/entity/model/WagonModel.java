@@ -46,6 +46,59 @@ import net.minecraft.util.Mth;
  * original bench box actually was -- see {@code #createLayer()}'s own `benchBack`/`benchSeat` split
  * for that fix, and {@code entity.WagonEntity#getPassengerAttachmentPoint}'s own doc for a related
  * real bug this surfaced (the seat was never actually rotated with the wagon at all).
+ *
+ * <p><b>Real wheel-break geometry, 2026-10-26</b> -- live-test feedback rejected a texture-only
+ * treatment outright: "making things 'grey' does not make them look broken. Break some of the
+ * spokes, take a wedge out of the iron band, remove an entire spoke -- those make the wheel
+ * actually look broken." Each of the 4 real wheel positions now bakes TWO geometry variants
+ * ({@code *Normal}/{@code *Broken}, both built by {@link #wheel(String, float, float, boolean)}),
+ * toggled per-wheel by {@code state.wheelBroken[i]} in {@link #setupAnim} -- the damaged variant
+ * omits one rim segment (a wedge missing from the iron band), omits one spoke entirely, and
+ * shortens two more spokes to snapped-off stubs, while the other 6 spokes/7 rim segments stay
+ * intact so it still clearly reads as a wheel, just a visibly wrecked one. A wheel is never hidden
+ * outright (per the earlier, still-standing "limp along, still attached" design) -- exactly one of
+ * the two baked variants is visible at any time.
+ *
+ * <p><b>Real positional fix for the fully-Broken tilt, 2026-10-26</b> -- a live-test screenshot
+ * showed the two wheels on the model's raised side floating disconnected in mid-air once
+ * {@code WagonRenderer} tilts the whole model ({@code BROKEN_TILT_DEGREES}), with no visible
+ * explanation, while the grounded side's wheels/the earlier "fallen wheel" debris pieces were
+ * barely visible against terrain. Root cause: every {@code ModelPart} in this model (wheels
+ * included) shares the ONE {@code PoseStack} tilt {@code WagonRenderer#submit} applies to the whole
+ * entity, so a wheel that should stay planted on the ground gets dragged along with the body's own
+ * rotation like everything else. Real fix, not a texture/visibility shortcut: {@link #setupAnim}
+ * now dynamically overrides the grounded-side wheels' own {@code x}/{@code y}/{@code zRot} (real,
+ * mutable {@code ModelPart} fields, confirmed directly from its own real decompiled source -- not
+ * just the rotation fields this class already animated) to the exact INVERSE of the shared tilt
+ * rotation, computed by {@link #compensateForTilt(float, float)}, so that once the renderer's own
+ * tilt is applied on top, that wheel lands back at precisely its normal, untilted ground position
+ * and orientation -- genuinely decoupling it from the body's rotation rather than approximating it.
+ * The raised side's wheels instead detach entirely (hidden outright, both variants) while fully
+ * Broken; the two "fallen wheel" debris pieces (also tilt-compensated the same way, to a ground-level
+ * target position, and rotated to a partial, readable "toppled" angle rather than a fully flat
+ * disc -- a flat disc is nearly edge-on and hence nearly invisible from a normal gameplay camera
+ * angle, the real cause of the "barely visible" report) now represent them lying on the ground
+ * instead.
+ *
+ * <p><b>Which side is "grounded" vs. "raised," derived not guessed</b> -- confirmed directly against
+ * {@code com.mojang.math.Axis}'s own real source: {@code Axis.ZP.rotationDegrees(angle)} is exactly
+ * {@code new Quaternionf().rotationZ(radians)}, the standard right-handed convention
+ * ({@code x' = x*cosθ - y*sinθ}, {@code y' = x*sinθ + y*cosθ}). {@code WagonRenderer#submit} applies
+ * this tilt to the SAME raw, pre-mirror model-space coordinates this class authors in (the tilt is
+ * pushed onto the {@code PoseStack} before the {@code scale(-1, -1, 1)} mirror and {@code yRot}, so
+ * it transforms these vertices directly, not some already-flipped space). Substituting this class's
+ * own real coordinates: {@link #leftWheelFrontNormal}/{@link #leftWheelBackNormal} sit at POSITIVE
+ * local x (see {@link #createLayer()}) -- for {@code +BROKEN_TILT_DEGREES}, their y strictly
+ * INCREASES (less negative -- rises); the right wheels (negative local x) have y strictly DECREASE
+ * (sinks). So the LEFT-named pair rises and the RIGHT-named pair stays down/sinks when this entity
+ * tilts -- this is a direct substitution into the real rotation formula, not an assumption. This is
+ * also self-consistent with the body itself: the body's own geometry is centered on x=0, so its
+ * positive-x (left) edge rises and negative-x (right) edge sinks by the identical transform, meaning
+ * the body visually tilts toward its own right side in lockstep with the wheels -- the one thing
+ * this couldn't be verified without a real client (no boot-test this round, per standing process
+ * rule) is whether this derived "right" ends up matching the screenshot's own left/right as seen
+ * from whatever camera angle it was taken at; if a live re-test shows it backwards, flipping which
+ * named pair passes {@code grounded = true} in {@link #setupAnim} is the entire fix needed.
  */
 public final class WagonModel extends EntityModel<WagonRenderState> {
 
@@ -57,11 +110,19 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
     // CartModel#createBody uses), so raising it also raises the whole bed off the ground for free,
     // satisfying both halves of the request with the one change.
     private static final float WHEEL_RADIUS = 11.0F;
+    private static final float WHEEL_Y = -WHEEL_RADIUS;
 
-    private final ModelPart leftWheelFront;
-    private final ModelPart rightWheelFront;
-    private final ModelPart leftWheelBack;
-    private final ModelPart rightWheelBack;
+    /** Mirrors {@code WagonRenderer}'s own identical constant -- the renderer's real tilt angle while fully Broken; this class needs the same value for the positional-compensation math below. */
+    public static final float BROKEN_TILT_DEGREES = 12.0F;
+
+    private final ModelPart leftWheelFrontNormal;
+    private final ModelPart leftWheelFrontBroken;
+    private final ModelPart rightWheelFrontNormal;
+    private final ModelPart rightWheelFrontBroken;
+    private final ModelPart leftWheelBackNormal;
+    private final ModelPart leftWheelBackBroken;
+    private final ModelPart rightWheelBackNormal;
+    private final ModelPart rightWheelBackBroken;
     private final ModelPart fallenWheelFront;
     private final ModelPart fallenWheelBack;
 
@@ -70,43 +131,68 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         // EasyMeshBuilder#rootLayer nests the builder passed to it as a "root" child, same gotcha
         // HandCartModel/AnimalCartModel both already document -- one level deeper than naive.
         final ModelPart parts = root.getChild("root");
-        this.leftWheelFront = parts.getChild("leftWheelFront");
-        this.rightWheelFront = parts.getChild("rightWheelFront");
-        this.leftWheelBack = parts.getChild("leftWheelBack");
-        this.rightWheelBack = parts.getChild("rightWheelBack");
+        this.leftWheelFrontNormal = parts.getChild("leftWheelFrontNormal");
+        this.leftWheelFrontBroken = parts.getChild("leftWheelFrontBroken");
+        this.rightWheelFrontNormal = parts.getChild("rightWheelFrontNormal");
+        this.rightWheelFrontBroken = parts.getChild("rightWheelFrontBroken");
+        this.leftWheelBackNormal = parts.getChild("leftWheelBackNormal");
+        this.leftWheelBackBroken = parts.getChild("leftWheelBackBroken");
+        this.rightWheelBackNormal = parts.getChild("rightWheelBackNormal");
+        this.rightWheelBackBroken = parts.getChild("rightWheelBackBroken");
         this.fallenWheelFront = parts.getChild("fallenWheelFront");
         this.fallenWheelBack = parts.getChild("fallenWheelBack");
     }
 
-    /**
-     * Real bug fix, 2026-10-26: Wagon genuinely has 4 independent wheels (see {@code
-     * WagonRenderState#wheelRotation}'s own doc) -- each of the 4 real {@code ModelPart}s here now
-     * gets its own independent rotation from the matching array index (0 = leftFront, 1 =
-     * rightFront, 2 = leftBack, 3 = rightBack, matching this class's own child declaration order
-     * exactly), replacing the old left/right-shared-across-front-and-back pairing.
-     *
-     * <p>Design reversal, same day, real live-test feedback: a broken wheel no longer hides its own
-     * {@code ModelPart} (the earlier pass's approach) -- "I would like to see a visibly broken wheel
-     * still attached... it could still 'limp along' on the broken wheel until they all are broken,
-     * then it'd crash onto the ground." A wheel stays geometrically present and keeps rotating
-     * regardless of its own broken state; the damaged look now comes entirely from
-     * {@code WagonRenderer}'s own whole-body "wheels damaged" texture tier instead (see that class's
-     * own doc), and the dramatic full-wreck presentation (tilt, broken texture) is reserved for the
-     * fully-Broken (0 HP, all 4 wheels broken) state alone.
-     *
-     * <p>Real live-test polish request, same day: the Broken model "looks cool" but the tilt itself
-     * has "no visible cause" -- {@link #fallenWheelFront}/{@link #fallenWheelBack} (built in
-     * {@link #createLayer()}, lying flat, offset outboard of the real wheels) are now shown only
-     * while {@code state.broken}, to visually explain why the wagon is listing to one side.
-     */
+    /** See this class's own doc for the full derivation/reasoning behind every piece of this method. */
     @Override
     public void setupAnim(final WagonRenderState state) {
-        this.leftWheelFront.xRot = state.wheelRotation[0];
-        this.rightWheelFront.xRot = state.wheelRotation[1];
-        this.leftWheelBack.xRot = state.wheelRotation[2];
-        this.rightWheelBack.xRot = state.wheelRotation[3];
-        this.fallenWheelFront.visible = state.broken;
-        this.fallenWheelBack.visible = state.broken;
+        final boolean fullyBroken = state.broken;
+        applyWheelPair(this.leftWheelFrontNormal, this.leftWheelFrontBroken, state.wheelRotation[0], state.wheelBroken[0], fullyBroken, false, WHEEL_TRACK_X);
+        applyWheelPair(this.rightWheelFrontNormal, this.rightWheelFrontBroken, state.wheelRotation[1], state.wheelBroken[1], fullyBroken, true, -WHEEL_TRACK_X);
+        applyWheelPair(this.leftWheelBackNormal, this.leftWheelBackBroken, state.wheelRotation[2], state.wheelBroken[2], fullyBroken, false, WHEEL_TRACK_X);
+        applyWheelPair(this.rightWheelBackNormal, this.rightWheelBackBroken, state.wheelRotation[3], state.wheelBroken[3], fullyBroken, true, -WHEEL_TRACK_X);
+
+        this.fallenWheelFront.visible = fullyBroken;
+        this.fallenWheelBack.visible = fullyBroken;
+        if (fullyBroken) {
+            this.fallenWheelFront.x = FALLEN_COMPENSATED[0];
+            this.fallenWheelFront.y = FALLEN_COMPENSATED[1];
+            this.fallenWheelFront.zRot = FALLEN_LOCAL_ZROT;
+            this.fallenWheelBack.x = FALLEN_COMPENSATED[0];
+            this.fallenWheelBack.y = FALLEN_COMPENSATED[1];
+            this.fallenWheelBack.zRot = FALLEN_LOCAL_ZROT;
+        }
+    }
+
+    /**
+     * One wheel position's whole real/broken-look pair, every frame. {@code grounded} is this
+     * class's own derived answer to "does this side stay down when the body tilts" (see the class
+     * doc) -- a grounded wheel gets position/orientation-compensated to stay put while fully Broken;
+     * a raised one detaches (hidden) outright, replaced visually by the fallen-wheel debris.
+     */
+    private static void applyWheelPair(final ModelPart normal, final ModelPart broken, final float rotation,
+            final boolean wheelBroken, final boolean fullyBroken, final boolean grounded, final float bakedX) {
+        normal.xRot = rotation;
+        broken.xRot = rotation;
+        normal.x = bakedX;
+        normal.y = WHEEL_Y;
+        normal.zRot = 0.0F;
+        if (fullyBroken && grounded) {
+            normal.visible = false;
+            broken.visible = true;
+            broken.x = GROUNDED_COMPENSATED[0];
+            broken.y = GROUNDED_COMPENSATED[1];
+            broken.zRot = GROUNDED_COUNTER_ZROT;
+        } else if (fullyBroken) {
+            normal.visible = false;
+            broken.visible = false;
+        } else {
+            broken.x = bakedX;
+            broken.y = WHEEL_Y;
+            broken.zRot = 0.0F;
+            normal.visible = !wheelBroken;
+            broken.visible = wheelBroken;
+        }
     }
 
     // Real user report, 2026-10-25: "lengthen the wagon by about 50%; the wheels are overlaping
@@ -125,34 +211,63 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
     // across the width" -- 1.155 * 1.10 = 1.2705.
     private static final float TRACK_SCALE = 1.2705F;
 
+    private static final float WHEEL_TRACK_X = 14.0F * TRACK_SCALE;
+    private static final float WHEEL_FRONT_Z = -10.0F * LENGTH_SCALE;
+    private static final float WHEEL_BACK_Z = 10.0F * LENGTH_SCALE;
+
+    /** The grounded (right-named) wheels' real baked position is {@code (-WHEEL_TRACK_X, WHEEL_Y)} -- this is the pre-tilt position that lands back there once the shared tilt applies. */
+    private static final float[] GROUNDED_COMPENSATED = compensateForTilt(-WHEEL_TRACK_X, WHEEL_Y);
+    /** The grounded wheel's own counter-rotation so its WORLD-visible orientation stays upright (net zero) regardless of the shared tilt. */
+    private static final float GROUNDED_COUNTER_ZROT = (float) -Math.toRadians(BROKEN_TILT_DEGREES);
+
+    // Real live-test polish request, 2026-10-26: "add 2 broken wheels visibly lying on the ground
+    // next to the wagon" when fully Broken, to visually explain the tilt -- target position kept
+    // identical to that first pass (outboard of the wheel track, near ground level); what changed is
+    // that it's now genuinely ACHIEVED via #compensateForTilt instead of just placed and left to
+    // drift with the shared tilt like everything else (the real root cause of "almost invisible in
+    // terrain" -- it likely drifted off the ground entirely on the raised side).
+    private static final float FALLEN_TARGET_X = WHEEL_TRACK_X + 6.0F;
+    private static final float FALLEN_TARGET_Y = -2.0F;
+    private static final float[] FALLEN_COMPENSATED = compensateForTilt(FALLEN_TARGET_X, FALLEN_TARGET_Y);
+    // A real second cause of "almost invisible," independent of position: a perfectly flat (90
+    // degree) disc is nearly edge-on from a normal gameplay camera angle, showing almost no visible
+    // face at all regardless of color/contrast. Propped up to a partial, readable "toppled over"
+    // angle instead of fully flat.
+    private static final float FALLEN_WORLD_ZROT_DEGREES = 55.0F;
+    private static final float FALLEN_LOCAL_ZROT = (float) (Math.toRadians(FALLEN_WORLD_ZROT_DEGREES) - Math.toRadians(BROKEN_TILT_DEGREES));
+
+    /**
+     * Inverse-rotates a desired POST-tilt (world-visible) local {@code (x, y)} back to the PRE-tilt
+     * position/basis a {@code ModelPart} needs to sit at, so that once {@code WagonRenderer#submit}'s
+     * shared body tilt (a pure Z-axis rotation) is applied on top, that part lands back at exactly
+     * {@code (targetX, targetY)} regardless of the tilt. See this class's own top-level doc for the
+     * full real derivation (confirmed against {@code com.mojang.math.Axis}'s own real rotation
+     * convention) this is built from.
+     */
+    private static float[] compensateForTilt(final float targetX, final float targetY) {
+        final double theta = Math.toRadians(BROKEN_TILT_DEGREES);
+        final double cos = Math.cos(theta);
+        final double sin = Math.sin(theta);
+        return new float[] {(float) (targetX * cos + targetY * sin), (float) (-targetX * sin + targetY * cos)};
+    }
+
     public static LayerDefinition createLayer() {
         final EasyMeshBuilder root = new EasyMeshBuilder("root");
 
-        final float xOffset = 14.0F * TRACK_SCALE;
-        final float frontZ = -10.0F * LENGTH_SCALE;
-        final float backZ = 10.0F * LENGTH_SCALE;
+        root.addChild(wheel("leftWheelFrontNormal", WHEEL_TRACK_X, WHEEL_FRONT_Z, false));
+        root.addChild(wheel("leftWheelFrontBroken", WHEEL_TRACK_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("rightWheelFrontNormal", -WHEEL_TRACK_X, WHEEL_FRONT_Z, false));
+        root.addChild(wheel("rightWheelFrontBroken", -WHEEL_TRACK_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("leftWheelBackNormal", WHEEL_TRACK_X, WHEEL_BACK_Z, false));
+        root.addChild(wheel("leftWheelBackBroken", WHEEL_TRACK_X, WHEEL_BACK_Z, true));
+        root.addChild(wheel("rightWheelBackNormal", -WHEEL_TRACK_X, WHEEL_BACK_Z, false));
+        root.addChild(wheel("rightWheelBackBroken", -WHEEL_TRACK_X, WHEEL_BACK_Z, true));
 
-        root.addChild(wheel("leftWheelFront", xOffset, frontZ));
-        root.addChild(wheel("rightWheelFront", -xOffset, frontZ));
-        root.addChild(wheel("leftWheelBack", xOffset, backZ));
-        root.addChild(wheel("rightWheelBack", -xOffset, backZ));
-
-        // Real live-test polish request, 2026-10-26: "add 2 broken wheels visibly lying on the ground
-        // next to the wagon" when fully Broken, to visually explain the tilt (currently no visible
-        // cause). Lightest implementation -- no new art: reuses the same real 8-spoke #wheel geometry,
-        // just laid flat (zRot) and placed outboard of the real wheel track, near ground level. Only
-        // shown while broken (see #setupAnim).
-        final float fallenWheelX = xOffset + 6.0F;
-        final float fallenWheelY = -2.0F;
-        final EasyMeshBuilder fallenWheelFront = wheel("fallenWheelFront", fallenWheelX, frontZ);
-        fallenWheelFront.setRotationPoint(fallenWheelX, fallenWheelY, frontZ);
-        fallenWheelFront.zRot = Mth.PI / 2.0F;
-        root.addChild(fallenWheelFront);
-
-        final EasyMeshBuilder fallenWheelBack = wheel("fallenWheelBack", fallenWheelX, backZ);
-        fallenWheelBack.setRotationPoint(fallenWheelX, fallenWheelY, backZ);
-        fallenWheelBack.zRot = Mth.PI / 2.0F;
-        root.addChild(fallenWheelBack);
+        // Fallen debris -- always built using the damaged-look geometry (thematically it's a
+        // destroyed wheel lying on the ground); baked position here is irrelevant, #setupAnim always
+        // overrides x/y/zRot dynamically whenever it's actually shown.
+        root.addChild(wheel("fallenWheelFront", FALLEN_TARGET_X, WHEEL_FRONT_Z, true));
+        root.addChild(wheel("fallenWheelBack", FALLEN_TARGET_X, WHEEL_BACK_Z, true));
 
         final EasyMeshBuilder body = new EasyMeshBuilder("body");
         body.setRotationPoint(0.0F, -WHEEL_RADIUS, 0.0F);
@@ -165,12 +280,12 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         // Real axles connecting each pair of wheels -- structural dressing new this pass, matching
         // NiftyCarts' own reference (which also models real axles, not just free-floating wheels).
         final EasyMeshBuilder axleFront = new EasyMeshBuilder("axleFront", 0, 20);
-        axleFront.addBox(-xOffset, -1.0F, -1.0F, xOffset * 2.0F, 2, 2);
-        axleFront.setRotationPoint(0.0F, 0.0F, frontZ);
+        axleFront.addBox(-WHEEL_TRACK_X, -1.0F, -1.0F, WHEEL_TRACK_X * 2.0F, 2, 2);
+        axleFront.setRotationPoint(0.0F, 0.0F, WHEEL_FRONT_Z);
 
         final EasyMeshBuilder axleBack = new EasyMeshBuilder("axleBack", 0, 20);
-        axleBack.addBox(-xOffset, -1.0F, -1.0F, xOffset * 2.0F, 2, 2);
-        axleBack.setRotationPoint(0.0F, 0.0F, backZ);
+        axleBack.addBox(-WHEEL_TRACK_X, -1.0F, -1.0F, WHEEL_TRACK_X * 2.0F, 2, 2);
+        axleBack.setRotationPoint(0.0F, 0.0F, WHEEL_BACK_Z);
 
         // Corner posts + top/bottom side rails replace the old single flat side panel -- reads as a
         // real built wagon side (NiftyCarts' own wagon uses the same "beams + rails" shape for its
@@ -274,19 +389,31 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
      * x=0 (unlike Animal Cart's own left/right-specific offset boxes) since this one function is
      * reused for all 4 wheels via the {@code xOffset} sign -- already proven safe for this model's
      * own simpler wheel shape, see the previous geometry pass.
+     *
+     * <p>Real live-test feedback, 2026-10-26: "break some of the spokes, take a wedge out of the
+     * iron band, remove an entire spoke -- those make the wheel actually look broken" -- when
+     * {@code brokenLook} is true, rim segment 0 is omitted entirely (a wedge missing from the iron
+     * band), spoke 0 is omitted entirely (a fully missing spoke), and spokes 1/2 are shortened to
+     * snapped-off stubs -- the other 6 spokes/7 rim segments stay intact, so this still clearly
+     * reads as a wheel, just a visibly wrecked one.
      */
-    private static EasyMeshBuilder wheel(final String name, final float xOffset, final float z) {
+    private static EasyMeshBuilder wheel(final String name, final float xOffset, final float z, final boolean brokenLook) {
         final EasyMeshBuilder wheel = new EasyMeshBuilder(name, 46, 60);
-        wheel.setRotationPoint(xOffset, -WHEEL_RADIUS, z);
+        wheel.setRotationPoint(xOffset, WHEEL_Y, z);
         wheel.addBox(-1.0F, -1.0F, -1.0F, 2, 2, 2);
         for (int i = 0; i < 8; i++) {
-            final EasyMeshBuilder rim = new EasyMeshBuilder(name + "_rim_" + i, 58, 54);
-            rim.addBox(-1.0F, -4.5F, 9.86F, 2, 9, 1);
-            rim.xRot = i * Mth.PI / 4.0F;
-            wheel.addChild(rim);
-
+            if (!(brokenLook && i == 0)) {
+                final EasyMeshBuilder rim = new EasyMeshBuilder(name + "_rim_" + i, 58, 54);
+                rim.addBox(-1.0F, -4.5F, 9.86F, 2, 9, 1);
+                rim.xRot = i * Mth.PI / 4.0F;
+                wheel.addChild(rim);
+            }
+            if (brokenLook && i == 0) {
+                continue;
+            }
+            final boolean snappedSpoke = brokenLook && (i == 1 || i == 2);
             final EasyMeshBuilder spoke = new EasyMeshBuilder(name + "_spoke_" + i, 54, 54);
-            spoke.addBox(-0.5F, 1.0F, -0.5F, 1, 9, 1);
+            spoke.addBox(-0.5F, 1.0F, -0.5F, 1, snappedSpoke ? 4 : 9, 1);
             spoke.xRot = i * Mth.PI / 4.0F;
             wheel.addChild(spoke);
         }

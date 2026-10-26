@@ -105,7 +105,8 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
     }
 
     /** Mirrors {@code WagonRenderer}'s own doc exactly. */
-    private static final float BROKEN_TILT_DEGREES = 12.0F;
+    // Mirrors WagonRenderer's own doc exactly -- single source of truth lives on CarriageModel now.
+    private static final float BROKEN_TILT_DEGREES = com.github.cerealklla.caryvan.client.renderer.entity.model.CarriageModel.BROKEN_TILT_DEGREES;
 
     @Override
     public void submit(final CarriageRenderState state, final PoseStack poseStack, final SubmitNodeCollector submitNodeCollector, final CameraRenderState camera) {
