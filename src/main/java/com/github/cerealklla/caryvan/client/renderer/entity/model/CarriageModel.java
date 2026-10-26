@@ -9,11 +9,9 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.util.Mth;
 
 /**
- * Carriage's geometry (design-document.md §8, built 2026-10-26) -- a direct adaptation of
- * {@link WagonModel}, not a fresh design: same real 8-spoke wheel ({@link #wheel}, copied verbatim,
- * same {@code texOffs}/box dims, so the existing wheel-rim-iron texture treatment transfers exactly
- * unchanged) and the same corner-post/side-rail/axle body language, scaled up and extended with a
- * second and third bench row for the interior seats.
+ * Carriage's geometry (design-document.md §8, built 2026-10-26) -- originally a direct adaptation of
+ * {@link WagonModel}, including its wheel ({@link #wheel}, still copied verbatim, same
+ * {@code texOffs}/box dims) and corner-post/axle body language.
  *
  * <p>Real user spec: "It will likely need to be a little longer and wider than the wagon to fit 4
  * inside comfortably." Unlike {@link WagonModel}, where {@code TRACK_SCALE} only widened the wheel
@@ -29,6 +27,26 @@ import net.minecraft.util.Mth;
  * planted on the ground instead of floating with the shared body tilt. See {@link WagonModel}'s own
  * doc for the full real derivation (confirmed against {@code com.mojang.math.Axis}'s own source) --
  * identical reasoning, just applied to this model's own geometry/constants.
+ *
+ * <p><b>Real structural redesign, 2026-10-26 -- enclosed cabin, Phase 1 of 4</b>: the user compared
+ * the Carriage against a real reference photo and found it was just a stretched/widened Wagon, not
+ * the enclosed passenger cabin they actually wanted. The open side rails behind the driver's bench
+ * ({@code sideLeftTop}/{@code Bottom}, {@code sideRightTop}/{@code Bottom}, now removed) are replaced
+ * by real solid walls with a genuine window-sized gap (two stacked bands, {@link #wallSkirt}/
+ * {@link #wallHeader}, with nothing built in between -- the same "an opening is modeled as missing
+ * geometry, not a texture trick" language this session's broken-wheel work already established) and
+ * two real door panels ({@link #wallDoor}), one per side, flush against the existing front wall. The
+ * existing {@code sideFront}/{@code sideBack} divider walls (previously a short 4-unit "dressing"
+ * rail) are now full wall height, and a flat {@link #roof} slab sits on top of the existing corner
+ * posts (which already happened to be exactly the right height -- {@code postHeight}=8, giving a
+ * world Y range of {@code [-8, 1]}, identical to the new {@link #WALL_HEIGHT}=9 span, confirmed by
+ * re-reading the existing constants before assuming anything needed to move). The driver's own open
+ * bench area in front of the existing front wall is completely untouched -- real period carriages
+ * seat the coachman exposed up front and the passengers enclosed behind, which this already matched
+ * by coincidence once the front wall was made solid. Doors are static/decorative this pass (no open/
+ * close animation, explicitly not ruled out later) -- interior seating, the door-triggered seat/
+ * eject interaction, and each door's own independent health/repair state are deliberately separate,
+ * later phases of this same dispatch, not built here.
  */
 public final class CarriageModel extends EntityModel<CarriageRenderState> {
 
@@ -57,6 +75,13 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     private static final float WHEEL_TRACK_X = 14.0F * TRACK_SCALE * WHEEL_TRACK_EXTRA_SCALE;
     private static final float WHEEL_FRONT_Z = -10.0F * LENGTH_SCALE;
     private static final float WHEEL_BACK_Z = 10.0F * LENGTH_SCALE;
+
+    // Real cabin wall height, 2026-10-26 -- matches the existing corner posts exactly (postHeight=8
+    // below gives a world Y range of [-8, 1], confirmed by re-reading that constant before picking
+    // a new one, rather than introducing a second, possibly-mismatched height).
+    private static final float WALL_Y_BOTTOM = -8.0F;
+    private static final float WALL_HEIGHT = 9.0F;
+    private static final float WALL_Y_TOP = WALL_Y_BOTTOM + WALL_HEIGHT;
 
     private static final float[] GROUNDED_COMPENSATED = compensateForTilt(-WHEEL_TRACK_X, WHEEL_Y);
     private static final float GROUNDED_COUNTER_ZROT = (float) -Math.toRadians(BROKEN_TILT_DEGREES);
@@ -197,24 +222,49 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         final EasyMeshBuilder postMidLeft = cornerPost("postMidLeft", -postX, -postHeight, postMidZ);
         final EasyMeshBuilder postMidRight = cornerPost("postMidRight", postXInner, -postHeight, postMidZ);
 
-        final float railX = 15.0F * TRACK_SCALE;
-        final EasyMeshBuilder sideLeftTop = sideRail("sideLeftTop", -railX, -8.0F);
-        final EasyMeshBuilder sideLeftBottom = sideRail("sideLeftBottom", -railX, -3.0F);
-        final EasyMeshBuilder sideRightTop = sideRail("sideRightTop", railX, -8.0F);
-        final EasyMeshBuilder sideRightBottom = sideRail("sideRightBottom", railX, -3.0F);
-
         final float sideFrontZ = -15.0F * LENGTH_SCALE;
         final float sideBackZ = 15.0F * LENGTH_SCALE;
         final float sideWidth = 28.0F * TRACK_SCALE;
         final float sideX = 14.0F * TRACK_SCALE;
 
+        // Real cabin walls, 2026-10-26 -- see this class's own top-level doc for the full writeup.
+        // Front/back walls raised from a 4-unit dressing rail to the real full WALL_HEIGHT, flush
+        // with the existing corner posts (already exactly this tall).
         final EasyMeshBuilder sideFront = new EasyMeshBuilder("sideFront", 0, 31);
-        sideFront.addBox(-sideX, -5.0F, -1.0F, sideWidth, 4, 1);
-        sideFront.setRotationPoint(0.0F, -5.0F, sideFrontZ);
+        sideFront.addBox(-sideX, 0.0F, -1.0F, sideWidth, WALL_HEIGHT, 1);
+        sideFront.setRotationPoint(0.0F, WALL_Y_BOTTOM, sideFrontZ);
 
         final EasyMeshBuilder sideBack = new EasyMeshBuilder("sideBack", 0, 31);
-        sideBack.addBox(-sideX, -5.0F, -1.0F, sideWidth, 4, 1);
-        sideBack.setRotationPoint(0.0F, -5.0F, sideBackZ);
+        sideBack.addBox(-sideX, 0.0F, -1.0F, sideWidth, WALL_HEIGHT, 1);
+        sideBack.setRotationPoint(0.0F, WALL_Y_BOTTOM, sideBackZ);
+
+        // Each side: a full-height door flush against the front wall (nearest the driver, easiest to
+        // step up into), then a solid skirt band, a genuine window-sized GAP (nothing built there at
+        // all -- see this class's own doc), then a header band above it, covering the rest of the
+        // cabin's length back to the rear wall.
+        final float doorLength = 5.0F * LENGTH_SCALE;
+        final float doorFrontZ = sideFrontZ;
+        final float doorBackZ = doorFrontZ + doorLength;
+        final EasyMeshBuilder wallDoorLeft = wallSegment("wallDoorLeft", -sideX, WALL_Y_BOTTOM, WALL_HEIGHT, doorFrontZ, doorBackZ);
+        final EasyMeshBuilder wallDoorRight = wallSegment("wallDoorRight", sideX, WALL_Y_BOTTOM, WALL_HEIGHT, doorFrontZ, doorBackZ);
+
+        final float skirtHeight = 5.0F;
+        final float windowHeight = 2.0F;
+        final float headerHeight = WALL_HEIGHT - skirtHeight - windowHeight;
+        final EasyMeshBuilder wallSkirtLeft = wallSegment("wallSkirtLeft", -sideX, WALL_Y_BOTTOM, skirtHeight, doorBackZ, sideBackZ);
+        final EasyMeshBuilder wallSkirtRight = wallSegment("wallSkirtRight", sideX, WALL_Y_BOTTOM, skirtHeight, doorBackZ, sideBackZ);
+        final EasyMeshBuilder wallHeaderLeft = wallSegment("wallHeaderLeft", -sideX, WALL_Y_BOTTOM + skirtHeight + windowHeight, headerHeight, doorBackZ, sideBackZ);
+        final EasyMeshBuilder wallHeaderRight = wallSegment("wallHeaderRight", sideX, WALL_Y_BOTTOM + skirtHeight + windowHeight, headerHeight, doorBackZ, sideBackZ);
+
+        // A flat roof slab over the cabin, resting on the existing corner/mid posts -- a small
+        // overhang on every edge for a real-looking eave, not flush with the walls.
+        final float roofOverhang = 1.0F;
+        final float cabinLength = sideBackZ - sideFrontZ;
+        final float cabinCenterZ = (sideFrontZ + sideBackZ) / 2.0F;
+        final EasyMeshBuilder roof = new EasyMeshBuilder("roof", 0, 50);
+        roof.addBox(-(sideX + roofOverhang), -1.0F, -(cabinLength / 2.0F + roofOverhang),
+                (sideX + roofOverhang) * 2.0F, 1, cabinLength + roofOverhang * 2.0F);
+        roof.setRotationPoint(0.0F, WALL_Y_TOP, cabinCenterZ);
 
         final float benchWidth = 22.0F * TRACK_SCALE;
         final float benchXInner = 11.0F * TRACK_SCALE;
@@ -254,12 +304,15 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         body.addChild(postBackRight);
         body.addChild(postMidLeft);
         body.addChild(postMidRight);
-        body.addChild(sideLeftTop);
-        body.addChild(sideLeftBottom);
-        body.addChild(sideRightTop);
-        body.addChild(sideRightBottom);
         body.addChild(sideFront);
         body.addChild(sideBack);
+        body.addChild(wallDoorLeft);
+        body.addChild(wallDoorRight);
+        body.addChild(wallSkirtLeft);
+        body.addChild(wallSkirtRight);
+        body.addChild(wallHeaderLeft);
+        body.addChild(wallHeaderRight);
+        body.addChild(roof);
         body.addChild(frontBenchBack);
         body.addChild(frontBenchSeat);
         body.addChild(interiorBench1);
@@ -276,12 +329,20 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         return post;
     }
 
-    private static EasyMeshBuilder sideRail(final String name, final float x, final float y) {
-        final EasyMeshBuilder rail = new EasyMeshBuilder(name, 0, 26);
-        rail.addBox(-15.0F * LENGTH_SCALE, -1.0F, -0.5F, 30.0F * LENGTH_SCALE, 2, 1);
-        rail.setRotationPoint(x, y, 0.0F);
-        rail.yRot = x < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
-        return rail;
+    /**
+     * A flat panel running along the body's Z axis (length), used for both the cabin's side walls
+     * and its doors -- same "build along local X, then yRot 90 degrees to align with Z" technique
+     * the old {@code sideRail} helper this replaces already used, just with a real configurable
+     * height/Y-position/Z-span instead of a single fixed thin rail shape.
+     */
+    private static EasyMeshBuilder wallSegment(final String name, final float x, final float yBottom, final float height, final float zStart, final float zEnd) {
+        final float length = zEnd - zStart;
+        final float zCenter = (zStart + zEnd) / 2.0F;
+        final EasyMeshBuilder wall = new EasyMeshBuilder(name, 0, 31);
+        wall.addBox(-length / 2.0F, 0.0F, -0.5F, length, height, 1);
+        wall.setRotationPoint(x, yBottom, zCenter);
+        wall.yRot = x < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
+        return wall;
     }
 
     /** Mirrors {@code WagonModel#wheel}'s own doc exactly -- same real 8-spoke hub/rim pattern, same damaged-look variant. */
