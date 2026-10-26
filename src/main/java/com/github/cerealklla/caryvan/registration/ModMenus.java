@@ -2,6 +2,7 @@ package com.github.cerealklla.caryvan.registration;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.menu.AnimalCartMenu;
+import com.github.cerealklla.caryvan.menu.CarriageMenu;
 import com.github.cerealklla.caryvan.menu.WagonMenu;
 
 import net.minecraft.core.registries.Registries;
@@ -26,4 +27,8 @@ public final class ModMenus {
     public static final DeferredHolder<MenuType<?>, MenuType<WagonMenu>> WAGON = MENU_TYPES.register(
             "wagon",
             () -> IMenuTypeExtension.create((windowId, inventory, extraData) -> new WagonMenu(null, windowId, inventory)));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<CarriageMenu>> CARRIAGE = MENU_TYPES.register(
+            "carriage",
+            () -> IMenuTypeExtension.create((windowId, inventory, extraData) -> new CarriageMenu(null, windowId, inventory)));
 }

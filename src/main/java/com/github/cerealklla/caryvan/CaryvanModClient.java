@@ -4,12 +4,15 @@ import com.mojang.blaze3d.platform.InputConstants;
 
 import com.github.cerealklla.caryvan.client.ModModelLayers;
 import com.github.cerealklla.caryvan.client.renderer.entity.AnimalCartRenderer;
+import com.github.cerealklla.caryvan.client.renderer.entity.CarriageRenderer;
 import com.github.cerealklla.caryvan.client.renderer.entity.HandCartRenderer;
 import com.github.cerealklla.caryvan.client.renderer.entity.WagonRenderer;
 import com.github.cerealklla.caryvan.client.renderer.entity.model.AnimalCartModel;
+import com.github.cerealklla.caryvan.client.renderer.entity.model.CarriageModel;
 import com.github.cerealklla.caryvan.client.renderer.entity.model.HandCartModel;
 import com.github.cerealklla.caryvan.client.renderer.entity.model.WagonModel;
 import com.github.cerealklla.caryvan.menu.client.AnimalCartScreen;
+import com.github.cerealklla.caryvan.menu.client.CarriageScreen;
 import com.github.cerealklla.caryvan.menu.client.WagonScreen;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModEntities;
@@ -57,6 +60,7 @@ public class CaryvanModClient {
         event.registerLayerDefinition(ModModelLayers.HAND_CART, HandCartModel::createLayer);
         event.registerLayerDefinition(ModModelLayers.ANIMAL_CART, AnimalCartModel::createLayer);
         event.registerLayerDefinition(ModModelLayers.WAGON, WagonModel::createLayer);
+        event.registerLayerDefinition(ModModelLayers.CARRIAGE, CarriageModel::createLayer);
     }
 
     @SubscribeEvent
@@ -64,12 +68,14 @@ public class CaryvanModClient {
         event.registerEntityRenderer(ModEntities.HAND_CART.get(), HandCartRenderer::new);
         event.registerEntityRenderer(ModEntities.ANIMAL_CART.get(), AnimalCartRenderer::new);
         event.registerEntityRenderer(ModEntities.WAGON.get(), WagonRenderer::new);
+        event.registerEntityRenderer(ModEntities.CARRIAGE.get(), CarriageRenderer::new);
     }
 
     @SubscribeEvent
     static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenus.ANIMAL_CART.get(), AnimalCartScreen::new);
         event.register(ModMenus.WAGON.get(), WagonScreen::new);
+        event.register(ModMenus.CARRIAGE.get(), CarriageScreen::new);
     }
 
     @SubscribeEvent

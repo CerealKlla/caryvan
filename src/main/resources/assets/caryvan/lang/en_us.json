@@ -39,5 +39,18 @@
   "item.caryvan.mangrove_wagon": "Mangrove Wagon",
   "item.caryvan.bamboo_wagon": "Bamboo Wagon",
   "item.caryvan.crimson_wagon": "Crimson Wagon",
-  "item.caryvan.warped_wagon": "Warped Wagon"
+  "item.caryvan.warped_wagon": "Warped Wagon",
+  "entity.caryvan.carriage": "Carriage",
+  "item.caryvan.oak_carriage": "Oak Carriage",
+  "item.caryvan.spruce_carriage": "Spruce Carriage",
+  "item.caryvan.birch_carriage": "Birch Carriage",
+  "item.caryvan.acacia_carriage": "Acacia Carriage",
+  "item.caryvan.cherry_carriage": "Cherry Carriage",
+  "item.caryvan.jungle_carriage": "Jungle Carriage",
+  "item.caryvan.dark_oak_carriage": "Dark Oak Carriage",
+  "item.caryvan.pale_oak_carriage": "Pale Oak Carriage",
+  "item.caryvan.mangrove_carriage": "Mangrove Carriage",
+  "item.caryvan.bamboo_carriage": "Bamboo Carriage",
+  "item.caryvan.crimson_carriage": "Crimson Carriage",
+  "item.caryvan.warped_carriage": "Warped Carriage"
 }

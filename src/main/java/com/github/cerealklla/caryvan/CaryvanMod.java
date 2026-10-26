@@ -68,7 +68,8 @@ public class CaryvanMod {
                     java.util.List.of(
                             new ItemStack(ModItems.handCartFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
                             new ItemStack(ModItems.animalCartFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
-                            new ItemStack(ModItems.wagonFor(net.minecraft.world.level.block.state.properties.WoodType.OAK))));
+                            new ItemStack(ModItems.wagonFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
+                            new ItemStack(ModItems.carriageFor(net.minecraft.world.level.block.state.properties.WoodType.OAK))));
         }
     }
 

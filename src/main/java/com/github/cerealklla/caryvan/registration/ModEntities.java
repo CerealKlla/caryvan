@@ -2,6 +2,7 @@ package com.github.cerealklla.caryvan.registration;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.entity.AnimalCartEntity;
+import com.github.cerealklla.caryvan.entity.CarriageEntity;
 import com.github.cerealklla.caryvan.entity.HandCartEntity;
 import com.github.cerealklla.caryvan.entity.WagonEntity;
 
@@ -34,4 +35,13 @@ public final class ModEntities {
             WagonEntity::new,
             MobCategory.MISC,
             builder -> builder.sized(2.0F, 1.5F));
+
+    // A little longer and wider than the Wagon -- real user spec, 2026-10-26, "to fit 4 inside
+    // comfortably." Same single-width-box approximation Wagon's own hitbox already uses (a real
+    // separate length/width hitbox isn't a thing vanilla's EntityType.Builder#sized supports).
+    public static final DeferredHolder<EntityType<?>, EntityType<CarriageEntity>> CARRIAGE = ENTITIES.registerEntityType(
+            "carriage",
+            CarriageEntity::new,
+            MobCategory.MISC,
+            builder -> builder.sized(2.6F, 1.6F));
 }

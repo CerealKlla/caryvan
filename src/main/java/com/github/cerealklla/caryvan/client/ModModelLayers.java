@@ -26,4 +26,7 @@ public final class ModModelLayers {
 
     public static final ModelLayerLocation WAGON =
             new ModelLayerLocation(Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "wagon"), "main");
+
+    public static final ModelLayerLocation CARRIAGE =
+            new ModelLayerLocation(Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "carriage"), "main");
 }

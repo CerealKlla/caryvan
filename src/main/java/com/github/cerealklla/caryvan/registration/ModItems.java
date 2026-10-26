@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.item.AnimalCartItem;
+import com.github.cerealklla.caryvan.item.CarriageItem;
 import com.github.cerealklla.caryvan.item.HandCartItem;
 import com.github.cerealklla.caryvan.item.WagonItem;
 
@@ -39,6 +40,8 @@ public final class ModItems {
     // Added 2026-10-26, same shape as the two above -- explicit user request, "make sure all the
     // wood variants exist for the wagon," closing the one remaining single-plain-item gap.
     private static final Map<WoodType, DeferredItem<WagonItem>> WAGONS = new HashMap<>();
+    // Added 2026-10-26 alongside the new Carriage entity -- same shape as the three above.
+    private static final Map<WoodType, DeferredItem<CarriageItem>> CARRIAGES = new HashMap<>();
 
     static {
         WoodType.values().forEach(woodType -> {
@@ -57,6 +60,11 @@ public final class ModItems {
                     id -> new WagonItem(new Item.Properties()
                             .stacksTo(1)
                             .setId(ResourceKey.create(Registries.ITEM, id)), woodType)));
+            CARRIAGES.put(woodType, ITEMS.register(
+                    woodType.name() + "_carriage",
+                    id -> new CarriageItem(new Item.Properties()
+                            .stacksTo(1)
+                            .setId(ResourceKey.create(Registries.ITEM, id)), woodType)));
         });
     }
 
@@ -70,5 +78,9 @@ public final class ModItems {
 
     public static Item wagonFor(final WoodType woodType) {
         return WAGONS.get(woodType).get();
+    }
+
+    public static Item carriageFor(final WoodType woodType) {
+        return CARRIAGES.get(woodType).get();
     }
 }
