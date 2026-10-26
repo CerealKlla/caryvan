@@ -623,22 +623,39 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
         // seat regardless of where they clicked. Now the click's own X position (relative to this
         // cart's current facing) picks a side directly -- if that side is already taken but the
         // other one isn't, falls back to the free one instead of refusing outright.
-        if (!player.isShiftKeyDown() && this.realPlayerPassengerCount() < 2
+        // Real user correction, 2026-10-26: a first attempt at the mount-gate fix below let a player
+        // mount a seat even while that seat's own Companion already occupied it, miscounting
+        // companions as never competing for a player seat at all -- explicit "False, the purpose of
+        // those slots is for a companion to occupy those seats. I never asked you to let me bypass
+        // that and sit there anyway if a companion is already there." Reverted to the plain,
+        // symmetric rule: exactly 2 seats total, a companion or a player, first to claim a given side
+        // keeps it -- see #leftFree/#rightFree below and #canAddPassenger's own doc for the other
+        // half of this.
+        //
+        // Temporary diagnostic, 2026-10-26: the ORIGINAL mount-blocking report ("I can't right click
+        // or shift right click... it only opens inventory no matter where I click") turned out to
+        // involve no companions at all, so the fix above was never the real cause -- logging moved
+        // outside the gate so a failing gate condition is visible too, not just a successful one.
+        final boolean shiftHeld = player.isShiftKeyDown();
+        final boolean hasRoom = this.getPassengers().size() < 2;
+        final double clickHeightFraction = this.getBbHeight() <= 0 ? -1 : (location.y - this.getY()) / this.getBbHeight();
+        CaryvanMod.LOGGER.info(
+                "[cart-mount-debug] interact() gate check by {} -- shiftHeld={}, passengers={}, hasRoom={}, clickHeightFraction={} (needs > {}), bbHeight={}",
+                player.getName().getString(), shiftHeld, this.getPassengers().size(), hasRoom, clickHeightFraction,
+                BENCH_CLICK_HEIGHT_FRACTION, this.getBbHeight());
+        if (!shiftHeld && hasRoom
                 && location.y - this.getY() > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
-            // Real user report, 2026-10-26: a precise repro (first click after a world load lands
-            // right, every click after that lands left, regardless of which half was actually
-            // clicked) traced the real cause to #isLeftSideClick's old click-hit-point precision
-            // problem -- see that method's own doc for the full writeup. Logging kept (lighter than
-            // the investigation round) to confirm the real fix actually holds; delete once it does.
             final boolean alreadyRiding = this.hasPassenger(player);
             final boolean wantsLeft = this.isLeftSideClick(player);
-            final boolean leftFree = this.leftSeatOccupant == null;
-            final boolean rightFree = this.rightSeatOccupant == null;
+            final boolean leftFree = this.leftSeatOccupant == null && this.companionLeft == null;
+            final boolean rightFree = this.rightSeatOccupant == null && this.companionRight == null;
             CaryvanMod.LOGGER.info(
-                    "[cart-mount-debug] interact() by {} -- alreadyRiding={}, wantsLeft={}, leftFree={}, rightFree={}, leftSeatOccupant={}, rightSeatOccupant={}",
+                    "[cart-mount-debug] interact() by {} -- alreadyRiding={}, wantsLeft={}, leftFree={}, rightFree={}, leftSeatOccupant={}, rightSeatOccupant={}, companionLeft={}, companionRight={}",
                     player.getName().getString(), alreadyRiding, wantsLeft, leftFree, rightFree,
                     this.leftSeatOccupant == null ? "null" : this.leftSeatOccupant.getName().getString(),
-                    this.rightSeatOccupant == null ? "null" : this.rightSeatOccupant.getName().getString());
+                    this.rightSeatOccupant == null ? "null" : this.rightSeatOccupant.getName().getString(),
+                    this.companionLeft == null ? "null" : this.companionLeft.getType(),
+                    this.companionRight == null ? "null" : this.companionRight.getType());
             if (alreadyRiding) {
                 // Don't let re-clicking the bench while already seated reassign/duplicate seat
                 // tracking -- a real, separate bug found while investigating the report above.
@@ -755,32 +772,24 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
     }
 
     /**
-     * Up to 2 riders on the bench (design-document.md §8 point 2: "1-2 seats, left=driver") --
-     * default {@code Entity#canAddPassenger} only ever allows 1. A Companion-slot occupant is always
-     * let on (this class itself calls {@code startRiding} for one, from {@link #tickCompanionSlots}
-     * -- the 2-rider cap only needs to gate actual players clicking to mount the bench).
+     * Up to 2 riders total, player or Companion, not both at the same side -- real user correction,
+     * 2026-10-26: "the purpose of those slots is for a companion to occupy those seats... what would
+     * [bypassing that] do to the companion? do they die? does the companion go back to the wagon
+     * owner? there are unnecessary complications we'd have to overcome for a feature I never asked
+     * for." A companion's own side is refused once a player already holds it (mirrors {@link
+     * #interact}'s own {@code leftFree}/{@code rightFree} check for the reverse direction) -- a
+     * player's own click-time check already guarantees a free side exists before {@code startRiding}
+     * is even attempted, so the plain total-count cap is enough for that branch.
      */
     @Override
     protected boolean canAddPassenger(final Entity passenger) {
-        if (passenger == this.companionLeft || passenger == this.companionRight) {
-            return true;
+        if (passenger == this.companionLeft) {
+            return this.leftSeatOccupant == null;
         }
-        return this.realPlayerPassengerCount() < 2;
-    }
-
-    /**
-     * Real live-test bug, 2026-10-26: "I can't right click or shift right click to mount the wagon
-     * anymore, it only opens inventory no matter where I click." Root cause -- once a Companion slot's
-     * occupant became a real passenger (this session's own earlier fix, see {@link
-     * #tickCompanionSlots}'s own doc), {@link #interact}'s own bench-click gate still read the RAW
-     * {@code getPassengers().size() < 2}, which now counts a riding companion as if it were taking up
-     * one of the two player seats -- with both Companion slots filled, that gate was permanently
-     * false for every player, regardless of click position. {@link #canAddPassenger} already excluded
-     * companions correctly; {@link #interact}'s own gate just never got the same treatment when
-     * Companions were added. This is the one shared count both should actually use.
-     */
-    private long realPlayerPassengerCount() {
-        return this.getPassengers().stream().filter(p -> p != this.companionLeft && p != this.companionRight).count();
+        if (passenger == this.companionRight) {
+            return this.rightSeatOccupant == null;
+        }
+        return this.getPassengers().size() < 2;
     }
 
     /**

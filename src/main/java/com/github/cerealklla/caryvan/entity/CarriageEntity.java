@@ -358,15 +358,26 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
 
     private static final double BENCH_CLICK_HEIGHT_FRACTION = 0.6;
 
-    /** Same shape as {@code WagonEntity#interact} -- only the front bench is directly player-clickable; the 4 interior seats are Companion-slot-only (see this class's own doc). */
+    /**
+     * Same shape as {@code WagonEntity#interact} -- only the front bench is directly player-clickable;
+     * the 4 interior seats are Companion-slot-only (see this class's own doc). Same real correction as
+     * {@code WagonEntity}'s own: a front Companion already occupying its side blocks a player from
+     * also claiming it, not the other way around -- see that class's own doc for the full writeup.
+     *
+     * <p>Unlike the Wagon (exactly 2 seats total, so a plain passenger-count cap doubles as "a seat is
+     * free"), the Carriage also carries up to 4 *interior* Companions as real passengers that have
+     * nothing to do with the front bench at all -- a plain {@code getPassengers().size() < 2} gate
+     * would incorrectly refuse a player even with both front seats empty, the instant 2+ interior
+     * seats were filled. The gate here checks front-seat availability directly instead.
+     */
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
-        if (!player.isShiftKeyDown() && this.realPlayerPassengerCount() < 2
+        final boolean leftFree = this.leftSeatOccupant == null && this.companions[0] == null;
+        final boolean rightFree = this.rightSeatOccupant == null && this.companions[1] == null;
+        if (!player.isShiftKeyDown() && (leftFree || rightFree)
                 && location.y - this.getY() > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
             final boolean alreadyRiding = this.hasPassenger(player);
             final boolean wantsLeft = this.isLeftSideClick(player);
-            final boolean leftFree = this.leftSeatOccupant == null;
-            final boolean rightFree = this.rightSeatOccupant == null;
             if (alreadyRiding) {
                 return InteractionResult.SUCCESS;
             }
@@ -436,20 +447,29 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
         return local.yRot(-yawRad);
     }
 
-    /** Generalized version of {@code WagonEntity#canAddPassenger} -- any of the 6 tracked companions always get on; a real player is still capped at 2 (the front bench only). */
+    /**
+     * Generalized version of {@code WagonEntity#canAddPassenger} -- real user correction, 2026-10-26
+     * (see {@code WagonEntity#canAddPassenger}'s own doc for the full writeup): only the front pair
+     * ({@link #companions}[0]/[1]) ever competes with a player for a seat, mirroring {@link #interact}'s
+     * own {@code leftFree}/{@code rightFree}; the 4 interior companions never compete with anything,
+     * since no click zone ever lets a player claim one of those seats in the first place.
+     */
     @Override
     protected boolean canAddPassenger(final Entity passenger) {
-        for (final Entity companion : this.companions) {
-            if (passenger == companion) {
+        if (passenger == this.companions[0]) {
+            return this.leftSeatOccupant == null;
+        }
+        if (passenger == this.companions[1]) {
+            return this.rightSeatOccupant == null;
+        }
+        for (int i = 2; i < this.companions.length; i++) {
+            if (passenger == this.companions[i]) {
                 return true;
             }
         }
-        return this.realPlayerPassengerCount() < 2;
-    }
-
-    /** Same bug/fix as {@code WagonEntity#realPlayerPassengerCount} -- see that method's own doc. */
-    private long realPlayerPassengerCount() {
-        return this.getPassengers().stream().filter(p -> companionSeatIndexOf(p) < 0).count();
+        final boolean leftFree = this.leftSeatOccupant == null && this.companions[0] == null;
+        final boolean rightFree = this.rightSeatOccupant == null && this.companions[1] == null;
+        return leftFree || rightFree;
     }
 
     /** Same shape as {@code WagonEntity#tickSteering}. */
