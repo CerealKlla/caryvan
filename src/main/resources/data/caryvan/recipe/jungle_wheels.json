@@ -3,11 +3,9 @@
   "category": "misc",
   "ingredients": [
     "minecraft:jungle_planks",
-    "minecraft:jungle_planks",
     "minecraft:iron_ingot"
   ],
   "result": {
-    "id": "caryvan:jungle_wheels",
-    "count": 2
+    "id": "caryvan:jungle_wheels"
   }
 }

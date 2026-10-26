@@ -3,11 +3,9 @@
   "category": "misc",
   "ingredients": [
     "minecraft:pale_oak_planks",
-    "minecraft:pale_oak_planks",
     "minecraft:iron_ingot"
   ],
   "result": {
-    "id": "caryvan:pale_oak_wheels",
-    "count": 2
+    "id": "caryvan:pale_oak_wheels"
   }
 }

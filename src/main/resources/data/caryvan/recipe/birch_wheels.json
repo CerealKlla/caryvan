@@ -3,11 +3,9 @@
   "category": "misc",
   "ingredients": [
     "minecraft:birch_planks",
-    "minecraft:birch_planks",
     "minecraft:iron_ingot"
   ],
   "result": {
-    "id": "caryvan:birch_wheels",
-    "count": 2
+    "id": "caryvan:birch_wheels"
   }
 }

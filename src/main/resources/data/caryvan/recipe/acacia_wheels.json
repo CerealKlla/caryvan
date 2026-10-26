@@ -3,11 +3,9 @@
   "category": "misc",
   "ingredients": [
     "minecraft:acacia_planks",
-    "minecraft:acacia_planks",
     "minecraft:iron_ingot"
   ],
   "result": {
-    "id": "caryvan:acacia_wheels",
-    "count": 2
+    "id": "caryvan:acacia_wheels"
   }
 }
