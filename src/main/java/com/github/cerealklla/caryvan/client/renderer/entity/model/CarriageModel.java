@@ -43,6 +43,8 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     private final ModelPart rightWheelFront;
     private final ModelPart leftWheelBack;
     private final ModelPart rightWheelBack;
+    private final ModelPart fallenWheelFront;
+    private final ModelPart fallenWheelBack;
 
     public CarriageModel(final ModelPart root) {
         super(root, RenderTypes::entityCutout);
@@ -51,15 +53,19 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         this.rightWheelFront = parts.getChild("rightWheelFront");
         this.leftWheelBack = parts.getChild("leftWheelBack");
         this.rightWheelBack = parts.getChild("rightWheelBack");
+        this.fallenWheelFront = parts.getChild("fallenWheelFront");
+        this.fallenWheelBack = parts.getChild("fallenWheelBack");
     }
 
     @Override
-    /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly -- 4 independent wheels, same index order, always geometrically present/attached regardless of broken state. */
+    /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly -- 4 independent wheels, same index order, always geometrically present/attached regardless of broken state, plus the fallen-wheel pair shown only while broken. */
     public void setupAnim(final CarriageRenderState state) {
         this.leftWheelFront.xRot = state.wheelRotation[0];
         this.rightWheelFront.xRot = state.wheelRotation[1];
         this.leftWheelBack.xRot = state.wheelRotation[2];
         this.rightWheelBack.xRot = state.wheelRotation[3];
+        this.fallenWheelFront.visible = state.broken;
+        this.fallenWheelBack.visible = state.broken;
     }
 
     public static LayerDefinition createLayer() {
@@ -73,6 +79,20 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         root.addChild(wheel("rightWheelFront", -xOffset, frontZ));
         root.addChild(wheel("leftWheelBack", xOffset, backZ));
         root.addChild(wheel("rightWheelBack", -xOffset, backZ));
+
+        // Mirrors WagonModel's own doc exactly -- real live-test polish request, "add 2 broken wheels
+        // visibly lying on the ground next to the wagon" when fully Broken.
+        final float fallenWheelX = xOffset + 6.0F;
+        final float fallenWheelY = -2.0F;
+        final EasyMeshBuilder fallenWheelFront = wheel("fallenWheelFront", fallenWheelX, frontZ);
+        fallenWheelFront.setRotationPoint(fallenWheelX, fallenWheelY, frontZ);
+        fallenWheelFront.zRot = Mth.PI / 2.0F;
+        root.addChild(fallenWheelFront);
+
+        final EasyMeshBuilder fallenWheelBack = wheel("fallenWheelBack", fallenWheelX, backZ);
+        fallenWheelBack.setRotationPoint(fallenWheelX, fallenWheelY, backZ);
+        fallenWheelBack.zRot = Mth.PI / 2.0F;
+        root.addChild(fallenWheelBack);
 
         final EasyMeshBuilder body = new EasyMeshBuilder("body");
         body.setRotationPoint(0.0F, -WHEEL_RADIUS, 0.0F);

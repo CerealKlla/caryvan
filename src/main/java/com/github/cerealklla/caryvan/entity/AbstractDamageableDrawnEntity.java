@@ -309,8 +309,8 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * Fully replaces vanilla's own {@code actuallyHurt} (armor/absorption/knockback bookkeeping that
      * doesn't apply to a cart) with this entity's own cumulative-damage model. {@link
      * #totalDamageTaken} is tracked purely to decide the wheel-break threshold -- health itself is
-     * applied directly below (real live-test bug, 2026-10-26: see {@link #recomputeHealthAndMax()}'s
-     * own doc for why deriving health from {@code base - totalDamageTaken} every time was wrong).
+     * applied directly below, and never derived from {@code base - totalDamageTaken} (see {@link
+     * #getTempMaxHealthCeiling()}'s own doc for the real design correction this followed).
      */
     @Override
     protected void actuallyHurt(final ServerLevel level, final DamageSource source, final float dmg) {
@@ -321,9 +321,9 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         this.totalDamageTaken = Mth.clamp(this.totalDamageTaken + dmg, 0.0F, base);
         this.recentlyDamagedUntilMillis = System.currentTimeMillis() + RECENTLY_DAMAGED_MILLIS;
         this.passiveRepairUntilMillis = 0L;
-        // The real hit itself -- applied directly to health, independent of the wheel-break
-        // recompute below. setHealth() clamps internally to [0, current max], so this alone can
-        // never raise health, only lower it.
+        // The real hit itself -- the ONLY thing that ever lowers health, and the only thing health
+        // ever derives from on the way down. setHealth() clamps internally to [0, the real,
+        // never-changing Attributes.MAX_HEALTH], so this alone can never raise health.
         this.setHealth(this.getHealth() - dmg);
 
         final int wheelCount = this.wheels.size();
@@ -335,8 +335,12 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
                 this.brokenWheelCount = desiredBroken;
             }
         }
+        // Real design correction, 2026-10-26: breaking a wheel used to also recompute/lower the real
+        // Attributes.MAX_HEALTH and reclamp current health down into it -- see #getTempMaxHealthCeiling's
+        // own doc for why that was wrong at a more fundamental level than the earlier "clamp-down-only"
+        // patch fixed. Breaking a wheel now ONLY updates #brokenWheelCount/the renderer sync below;
+        // it never touches health or the max-health attribute at all.
         applyBrokenWheelCount();
-        recomputeHealthAndMax();
         this.gameEvent(net.minecraft.world.level.gameevent.GameEvent.ENTITY_DAMAGE);
     }
 
@@ -354,42 +358,37 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     }
 
     /**
-     * Sets the Temp Max HP ceiling (= {@code (base / wheelCount) * functionalWheelCount}, per the
-     * approved plan's exact formula) and clamps current health DOWN into it if it now exceeds the
-     * new ceiling -- never raises health.
+     * Real design correction, 2026-10-26 -- supersedes the earlier "clamp current health DOWN into a
+     * lower ceiling, never raise it" fix outright, not just patches it, per the user's own explicit
+     * words: "You keep changing the 'Max HP'. Do not do that. That never changes. 'Temporary Max HP'
+     * is not visually represented on the health bar at all; it only prevents passive repair from
+     * repairing too much when no replacement wheel is consumed."
      *
-     * <p><b>Real live-test bug, 2026-10-26</b>: this used to unconditionally call {@code
-     * setHealth(base - totalDamageTaken)} every time, recomputing health from scratch off the
-     * cumulative-damage tracker. At the EXACT instant a wheel-break threshold is crossed (e.g. 2 of
-     * 4 wheels break at precisely 50% cumulative damage), {@code base - totalDamageTaken} and the
-     * brand-new, just-lowered {@code tempMax} are mathematically IDENTICAL (both derive from the
-     * same fractional-damage value) -- so health would read as exactly 100% of the new, lower
-     * ceiling at that instant, which looks exactly like "the health bar snapped back to full" even
-     * though the real/absolute HP never actually increased. Fixed by decoupling health from {@link
-     * #totalDamageTaken} entirely: {@link #actuallyHurt} now applies real damage directly to health,
-     * {@link #tickRepairStateMachine()}'s Passive Repair heal now applies its own heal directly to
-     * health, and this method's only remaining job is to move the ceiling and clamp health down into
-     * it if needed -- raising health is now exclusively Passive Repair's own explicit job, never an
-     * automatic side effect of a wheel breaking OR of {@link #repair} raising the ceiling back up.
+     * <p>{@code Attributes.MAX_HEALTH} is set exactly once, at construction ({@link #createAttributes}),
+     * to the real per-type base constant, and is **never touched again anywhere in this class** --
+     * confirmed by re-reading this entire file after this fix: the only remaining
+     * {@code getAttribute(Attributes.MAX_HEALTH)}/{@code setBaseValue} reference is gone outright.
+     * {@link #getMaxHealth()} (and therefore what Nuclyus's stat bar displays) now always reads the
+     * unchanging base constant, exactly as the user wants.
+     *
+     * <p>"Temp Max HP" ({@code (base / wheelCount) * functionalWheelCount}) still exists, but purely
+     * as this internal, non-attribute computation -- it is never applied to the real max-health
+     * attribute and never used to clamp current health directly (breaking a wheel no longer touches
+     * current health AT ALL -- see {@link #actuallyHurt}'s own doc). Its one and only consumer is
+     * {@link #tickRepairStateMachine()}'s Passive Repair heal-over-time tick, which must not heal
+     * current health above whatever this returns *right now* (computed fresh off the live, current
+     * {@link #brokenWheelCount} every time it's called, not a cached/attribute-backed value) --
+     * passive, no-wheel-replaced healing can only ever get a cart back to "as healthy as its
+     * remaining good wheels allow," while an explicit {@link #repair} swapping in a real Wheel lowers
+     * {@link #brokenWheelCount}, which raises what this method returns, which lifts that cap for
+     * future passive healing -- for good, without ever having touched health or the attribute itself.
      */
-    private void recomputeHealthAndMax() {
+    private float getTempMaxHealthCeiling() {
         final float base = this.getBaseMaxHealth();
         final int wheelCount = this.wheels.size();
-        final float tempMax = wheelCount > 0
+        return wheelCount > 0
                 ? (base / wheelCount) * (wheelCount - this.brokenWheelCount)
                 : base;
-        // A hard floor of 1.0 -- an attribute base value of exactly 0 is untested territory vanilla
-        // never exercises (every real LivingEntity always has positive max health); this still
-        // reads/renders as fully broken (health itself still clamps to 0 below) without risking
-        // undefined attribute behavior at a literal zero ceiling.
-        final float clampedTempMax = Math.max(1.0F, tempMax);
-        final var maxHealthAttribute = this.getAttribute(Attributes.MAX_HEALTH);
-        if (maxHealthAttribute != null) {
-            maxHealthAttribute.setBaseValue(clampedTempMax);
-        }
-        if (this.getHealth() > clampedTempMax) {
-            this.setHealth(clampedTempMax);
-        }
     }
 
     /**
@@ -402,46 +401,60 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     // --- Recently Damaged / Passive Repair state machine ----------------------------------------
 
     /**
-     * Called from {@link #tick()} every server tick -- runs the actual Passive Repair heal-over-time
-     * tick while that window is active. {@code isRecentlyDamaged()} is a pure wall-clock comparison
-     * against {@link #recentlyDamagedUntilMillis} (see its own doc) and needs no per-tick bookkeeping
-     * here to "expire" -- it just naturally reads false once enough time has passed.
+     * Called from {@link #tick()} every server tick -- drives the automatic Recently-Damaged-expires-
+     * into-Passive-Repair transition and runs the actual heal-over-time tick while that window is
+     * active, per the approved plan's §4.
      *
-     * <p>Real live-test bug, 2026-10-26: "the wagon keeps healing itself after a few moments of me
-     * not riding it. Its passive health regen should be 0." Re-verified via real decompiled source
-     * first (per standing discipline) that vanilla has no generic Peaceful-difficulty auto-heal on
-     * {@code LivingEntity}/{@code Mob} that could be firing here -- neither class calls {@code heal()}
-     * anywhere in its own tick logic, confirmed directly, so that specific hypothesis was ruled out,
-     * not assumed. Grepping this entire class (and every sibling entity/menu/item class) for
-     * {@code setHealth(} turned up exactly three real call sites: the direct hit in
-     * {@link #actuallyHurt}, the clamp-DOWN-only move in {@link #recomputeHealthAndMax}, and the
-     * heal-over-time tick just below -- nothing else in this codebase ever raises health. The real
-     * root cause: this method used to auto-START that heal-over-time window itself, the instant
-     * {@link #recentlyDamagedUntilMillis} merely timed out -- with zero player action required at
-     * all (the old doc here even called this out explicitly: "automatic, not gated on the Repair
-     * button at all"), which is exactly the unprompted healing being reported. {@link #repair(int)}
-     * (the one and only other place {@link #passiveRepairUntilMillis} is ever set) is the real,
-     * deliberate trigger -- a direct result of the player clicking Repair (GUI button or
-     * sneak+right-click). Removing the auto-start branch here means the heal-over-time window now
-     * only ever begins as that deliberate action's own reward, never merely from time passing with no
-     * player involvement -- "passive health regen" outside of it is now genuinely always 0.
+     * <p>Real live-test correction, 2026-10-26, in two parts (a false start, then the real fix). The
+     * first report -- "the wagon keeps healing itself after a few moments of me not riding it, its
+     * passive health regen should be 0" -- was initially (and wrongly) diagnosed as this method's own
+     * auto-start-on-expiry branch, which was removed outright on the theory that healing should only
+     * ever follow a deliberate Repair click. The user's own follow-up correction: **that auto-start is
+     * exactly right and matches the approved plan precisely** ("the wagon IS supposed to
+     * auto-repair... but only after the 5 minute 'recently damaged' debuff is gone") -- restored below,
+     * unchanged from the original design. The REAL root cause of the original report was the
+     * since-corrected Max-HP-attribute bug (see {@link #getTempMaxHealthCeiling()}'s own doc): current
+     * health was tracking/jumping whenever the real max-health attribute itself got dynamically
+     * recomputed off wheel count, which read as unprompted "healing" even though no heal-over-time
+     * tick was actually involved. With max-health now truly constant and current health fully
+     * decoupled from any wheel-count-driven recompute, "passive regen should be 0" instead means
+     * exactly what it says structurally: outside an active Passive Repair window (this method) or
+     * {@link #repair(int)}'s own instant partial heal, current health never moves on its own at all --
+     * re-confirmed true by grepping this entire class for every {@code setHealth(} call site.
      */
     private void tickRepairStateMachine() {
         final long now = System.currentTimeMillis();
+        if (this.recentlyDamagedUntilMillis > 0L && now >= this.recentlyDamagedUntilMillis) {
+            // "Once the 'Recently Damaged' debuff ends, apply the 'Passive Repair' buff for 5
+            // minutes" -- real user spec, automatic, not gated on the Repair button at all.
+            this.recentlyDamagedUntilMillis = 0L;
+            if (this.passiveRepairUntilMillis <= 0L) {
+                this.passiveRepairUntilMillis = now + PASSIVE_REPAIR_MILLIS;
+            }
+        }
         if (this.passiveRepairUntilMillis > 0L) {
             if (now >= this.passiveRepairUntilMillis) {
                 this.passiveRepairUntilMillis = 0L;
-            } else if (this.getHealth() < this.getMaxHealth()) {
-                // Gated on real current health vs. the real current ceiling -- NOT totalDamageTaken,
-                // which can now legitimately diverge from health (see #recomputeHealthAndMax's own
-                // doc: a wheel-break clamp-down lowers health without touching totalDamageTaken).
-                final float healPerTick = (PASSIVE_REPAIR_FRACTION_OF_BASE * this.getBaseMaxHealth()) / (PASSIVE_REPAIR_MILLIS / 50L);
-                this.totalDamageTaken = Math.max(0.0F, this.totalDamageTaken - healPerTick);
-                // The actual heal -- applied directly to health (setHealth clamps to the current
-                // real ceiling on its own, so this can never overheal past it).
-                this.setHealth(this.getHealth() + healPerTick);
-                // Deliberately does NOT touch #brokenWheelCount -- passive healing restores HP only,
-                // never un-breaks a wheel; that's exclusively Repair's job (see #repair).
+            } else {
+                // Capped at the live Temp Max HP ceiling (re-derived from the current #brokenWheelCount
+                // every call), NOT #getMaxHealth() -- the real max-health attribute never changes, so
+                // capping against it would let no-wheel-replaced passive healing reach all the way back
+                // to full, which is exactly what this ceiling exists to prevent (per the user's own
+                // design correction -- see #getTempMaxHealthCeiling's own doc).
+                final float tempMaxCeiling = getTempMaxHealthCeiling();
+                if (this.getHealth() < tempMaxCeiling) {
+                    final float healPerTick = (PASSIVE_REPAIR_FRACTION_OF_BASE * this.getBaseMaxHealth()) / (PASSIVE_REPAIR_MILLIS / 50L);
+                    // Explicitly clamped to the ceiling -- setHealth() alone only clamps to the real,
+                    // unchanging max-health attribute, which is no longer narrow enough to rely on.
+                    // #totalDamageTaken is deliberately NOT decremented here (unlike the pre-correction
+                    // code) -- the user's own correction is explicit that it "should stay
+                    // monotonic/cumulative" (it drives the wheel-break threshold in #actuallyHurt and
+                    // nothing else), so passive healing raising current health must not also quietly
+                    // lower it.
+                    this.setHealth(Math.min(this.getHealth() + healPerTick, tempMaxCeiling));
+                    // Deliberately does NOT touch #brokenWheelCount -- passive healing restores HP only,
+                    // never un-breaks a wheel; that's exclusively Repair's job (see #repair).
+                }
             }
         }
     }
@@ -490,10 +503,20 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
 
     /**
      * Explicit Repair action -- consumes up to {@code wheelsAvailable} matching Wheels items (the
-     * caller already resolved/removed them from cargo), un-breaks that many wheels, and starts a
-     * fresh 5-minute Passive Repair window regardless of current HP, per the approved plan's §5.
-     * Only meaningful while {@link #isRecentlyDamaged()} is false -- the caller is responsible for
-     * that gate (mirrors the GUI button's own "only clickable if not recently damaged" spec).
+     * caller already resolved/removed them from cargo), un-breaks that many wheels, grants an instant
+     * partial heal for the wheels actually swapped in, and starts a fresh 5-minute Passive Repair
+     * window regardless of current HP, per the approved plan's §5. Only meaningful while {@link
+     * #isRecentlyDamaged()} is false -- the caller is responsible for that gate (mirrors the GUI
+     * button's own "only clickable if not recently damaged" spec).
+     *
+     * <p>Real design correction, 2026-10-26, per the user's own words: current health is only ever
+     * allowed to move via "an explicit heal (the Passive Repair tick, capped as above, or Repair's own
+     * instant partial heal when it swaps in Wheels)." Each wheel actually un-broken here instantly
+     * restores its own even share of the real base Max HP ({@code base / wheelCount}) -- capped at the
+     * new, just-raised {@link #getTempMaxHealthCeiling()} so this can never overheal past what the
+     * freshly-reduced {@link #brokenWheelCount} now allows. {@link #tickRepairStateMachine()}'s own
+     * heal-over-time window (started fresh below, same as before) then continues on top of this for
+     * whatever's left.
      *
      * @return how many wheels were actually un-broken (so the caller knows how many Wheels items were genuinely consumed).
      */
@@ -502,9 +525,13 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         if (toFix > 0) {
             this.brokenWheelCount -= toFix;
             applyBrokenWheelCount();
+            final int wheelCount = this.wheels.size();
+            if (wheelCount > 0) {
+                final float instantHeal = (this.getBaseMaxHealth() / wheelCount) * toFix;
+                this.setHealth(Math.min(this.getHealth() + instantHeal, getTempMaxHealthCeiling()));
+            }
         }
         this.passiveRepairUntilMillis = System.currentTimeMillis() + PASSIVE_REPAIR_MILLIS;
-        recomputeHealthAndMax();
         return toFix;
     }
 
@@ -927,11 +954,18 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * (persists real health, absorption, active effects, equipment, hurt/death timers, etc.), unlike
      * {@code VehicleEntity}/{@code Entity}, where these are abstract with no body at all -- the
      * omission of a {@code super} call here was copied verbatim from {@code AbstractDrawnEntity},
-     * which genuinely never needed one. This class's own recompute (the tail of this method) still
-     * overwrites whatever {@code super} sets for health/max-health, so it alone isn't expected to be
-     * the full explanation for the reported symptom -- but skipping LivingEntity's own real
-     * persisted state is a genuine, independent correctness gap regardless (every other
-     * {@code LivingEntity} subclass in the game calls {@code super} here), so it's restored.
+     * which genuinely never needed one. Skipping LivingEntity's own real persisted state is a
+     * genuine, independent correctness gap regardless (every other {@code LivingEntity} subclass in
+     * the game calls {@code super} here), so it's restored.
+     *
+     * <p>Real design correction, 2026-10-26: this used to call a recompute that also re-set the real
+     * max-health attribute off the just-restored {@link #brokenWheelCount} -- gone along with the
+     * rest of that mechanism (see {@link #getTempMaxHealthCeiling()}'s own doc). {@code super}'s own
+     * call above already restores the real, unchanging max-health attribute and current health
+     * directly (confirmed via real decompiled source: {@code LivingEntity} persists both, including
+     * the attribute via {@code AttributeInstance.Packed.LIST_CODEC}) -- nothing further needs
+     * recomputing here. {@link #applyBrokenWheelCount()} still runs, purely to re-sync the per-wheel
+     * {@link CartWheel}/client-visible bitmask state (cosmetic only) from the just-restored count.
      */
     @Override
     protected void readAdditionalSaveData(final ValueInput input) {
@@ -945,7 +979,6 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         this.recentlyDamagedUntilMillis = input.getLongOr("RecentlyDamagedUntilMillis", 0L);
         this.passiveRepairUntilMillis = input.getLongOr("PassiveRepairUntilMillis", 0L);
         applyBrokenWheelCount();
-        recomputeHealthAndMax();
     }
 
     @Override

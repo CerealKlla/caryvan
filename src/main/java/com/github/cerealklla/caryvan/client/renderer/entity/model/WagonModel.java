@@ -62,6 +62,8 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
     private final ModelPart rightWheelFront;
     private final ModelPart leftWheelBack;
     private final ModelPart rightWheelBack;
+    private final ModelPart fallenWheelFront;
+    private final ModelPart fallenWheelBack;
 
     public WagonModel(final ModelPart root) {
         super(root, RenderTypes::entityCutout);
@@ -72,6 +74,8 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         this.rightWheelFront = parts.getChild("rightWheelFront");
         this.leftWheelBack = parts.getChild("leftWheelBack");
         this.rightWheelBack = parts.getChild("rightWheelBack");
+        this.fallenWheelFront = parts.getChild("fallenWheelFront");
+        this.fallenWheelBack = parts.getChild("fallenWheelBack");
     }
 
     /**
@@ -89,6 +93,11 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
      * {@code WagonRenderer}'s own whole-body "wheels damaged" texture tier instead (see that class's
      * own doc), and the dramatic full-wreck presentation (tilt, broken texture) is reserved for the
      * fully-Broken (0 HP, all 4 wheels broken) state alone.
+     *
+     * <p>Real live-test polish request, same day: the Broken model "looks cool" but the tilt itself
+     * has "no visible cause" -- {@link #fallenWheelFront}/{@link #fallenWheelBack} (built in
+     * {@link #createLayer()}, lying flat, offset outboard of the real wheels) are now shown only
+     * while {@code state.broken}, to visually explain why the wagon is listing to one side.
      */
     @Override
     public void setupAnim(final WagonRenderState state) {
@@ -96,6 +105,8 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         this.rightWheelFront.xRot = state.wheelRotation[1];
         this.leftWheelBack.xRot = state.wheelRotation[2];
         this.rightWheelBack.xRot = state.wheelRotation[3];
+        this.fallenWheelFront.visible = state.broken;
+        this.fallenWheelBack.visible = state.broken;
     }
 
     // Real user report, 2026-10-25: "lengthen the wagon by about 50%; the wheels are overlaping
@@ -125,6 +136,23 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         root.addChild(wheel("rightWheelFront", -xOffset, frontZ));
         root.addChild(wheel("leftWheelBack", xOffset, backZ));
         root.addChild(wheel("rightWheelBack", -xOffset, backZ));
+
+        // Real live-test polish request, 2026-10-26: "add 2 broken wheels visibly lying on the ground
+        // next to the wagon" when fully Broken, to visually explain the tilt (currently no visible
+        // cause). Lightest implementation -- no new art: reuses the same real 8-spoke #wheel geometry,
+        // just laid flat (zRot) and placed outboard of the real wheel track, near ground level. Only
+        // shown while broken (see #setupAnim).
+        final float fallenWheelX = xOffset + 6.0F;
+        final float fallenWheelY = -2.0F;
+        final EasyMeshBuilder fallenWheelFront = wheel("fallenWheelFront", fallenWheelX, frontZ);
+        fallenWheelFront.setRotationPoint(fallenWheelX, fallenWheelY, frontZ);
+        fallenWheelFront.zRot = Mth.PI / 2.0F;
+        root.addChild(fallenWheelFront);
+
+        final EasyMeshBuilder fallenWheelBack = wheel("fallenWheelBack", fallenWheelX, backZ);
+        fallenWheelBack.setRotationPoint(fallenWheelX, fallenWheelY, backZ);
+        fallenWheelBack.zRot = Mth.PI / 2.0F;
+        root.addChild(fallenWheelBack);
 
         final EasyMeshBuilder body = new EasyMeshBuilder("body");
         body.setRotationPoint(0.0F, -WHEEL_RADIUS, 0.0F);
