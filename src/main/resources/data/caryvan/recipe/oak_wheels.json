@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:oak_planks",
+    "minecraft:oak_planks",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "caryvan:oak_wheels",
+    "count": 2
+  }
+}

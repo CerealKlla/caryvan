@@ -2,8 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:birch_planks",
-    "minecraft:birch_planks",
+    "caryvan:birch_wheels",
+    "caryvan:birch_wheels",
     "minecraft:birch_planks",
     "minecraft:birch_planks",
     "minecraft:birch_planks"

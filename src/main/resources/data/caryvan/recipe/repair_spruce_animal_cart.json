@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "caryvan:broken_animal_cart",
+    "caryvan:spruce_wheels",
+    "caryvan:spruce_wheels"
+  ],
+  "result": {
+    "id": "caryvan:spruce_animal_cart"
+  }
+}

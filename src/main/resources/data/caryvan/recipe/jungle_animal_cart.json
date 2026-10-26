@@ -2,12 +2,11 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:jungle_wheels",
+    "caryvan:jungle_wheels",
     "minecraft:jungle_planks",
     "minecraft:jungle_planks",
     "minecraft:jungle_planks",
-    "minecraft:jungle_planks",
-    "minecraft:jungle_planks",
-    "minecraft:iron_ingot",
     "minecraft:iron_ingot"
   ],
   "result": {

@@ -2,8 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:mangrove_planks",
-    "minecraft:mangrove_planks",
+    "caryvan:mangrove_wheels",
+    "caryvan:mangrove_wheels",
     "minecraft:mangrove_planks",
     "minecraft:mangrove_planks",
     "minecraft:mangrove_planks"

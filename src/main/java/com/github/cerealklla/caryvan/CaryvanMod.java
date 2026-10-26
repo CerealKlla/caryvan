@@ -69,7 +69,11 @@ public class CaryvanMod {
                             new ItemStack(ModItems.handCartFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
                             new ItemStack(ModItems.animalCartFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
                             new ItemStack(ModItems.wagonFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
-                            new ItemStack(ModItems.carriageFor(net.minecraft.world.level.block.state.properties.WoodType.OAK))));
+                            new ItemStack(ModItems.carriageFor(net.minecraft.world.level.block.state.properties.WoodType.OAK)),
+                            // Wheel-rework testing items, 2026-10-26.
+                            new ItemStack(ModItems.wheelsFor(net.minecraft.world.level.block.state.properties.WoodType.OAK), 8),
+                            new ItemStack(ModItems.BROKEN_WAGON.get()),
+                            new ItemStack(ModItems.BROKEN_WHEEL.get(), 8)));
         }
     }
 

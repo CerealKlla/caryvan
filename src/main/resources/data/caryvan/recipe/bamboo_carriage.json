@@ -2,15 +2,13 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:bamboo_wheels",
+    "caryvan:bamboo_wheels",
+    "caryvan:bamboo_wheels",
+    "caryvan:bamboo_wheels",
     "minecraft:bamboo_planks",
     "minecraft:bamboo_planks",
-    "minecraft:bamboo_planks",
-    "minecraft:bamboo_planks",
-    "minecraft:bamboo_planks",
-    "minecraft:bamboo_planks",
-    "minecraft:bamboo_planks",
-    "minecraft:iron_ingot",
-    "minecraft:iron_ingot"
+    "minecraft:bamboo_planks"
   ],
   "result": {
     "id": "caryvan:bamboo_carriage"

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:crimson_planks",
+    "minecraft:crimson_planks",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "caryvan:crimson_wheels",
+    "count": 2
+  }
+}

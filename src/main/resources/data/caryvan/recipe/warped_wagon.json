@@ -2,14 +2,12 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:warped_wheels",
+    "caryvan:warped_wheels",
+    "caryvan:warped_wheels",
+    "caryvan:warped_wheels",
     "minecraft:warped_planks",
-    "minecraft:warped_planks",
-    "minecraft:warped_planks",
-    "minecraft:warped_planks",
-    "minecraft:warped_planks",
-    "minecraft:warped_planks",
-    "minecraft:iron_ingot",
-    "minecraft:iron_ingot"
+    "minecraft:warped_planks"
   ],
   "result": {
     "id": "caryvan:warped_wagon"

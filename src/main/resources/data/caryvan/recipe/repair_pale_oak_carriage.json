@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "caryvan:broken_carriage",
+    "caryvan:pale_oak_wheels",
+    "caryvan:pale_oak_wheels",
+    "caryvan:pale_oak_wheels",
+    "caryvan:pale_oak_wheels"
+  ],
+  "result": {
+    "id": "caryvan:pale_oak_carriage"
+  }
+}

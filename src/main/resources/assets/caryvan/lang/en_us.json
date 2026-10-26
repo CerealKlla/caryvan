@@ -52,5 +52,22 @@
   "item.caryvan.mangrove_carriage": "Mangrove Carriage",
   "item.caryvan.bamboo_carriage": "Bamboo Carriage",
   "item.caryvan.crimson_carriage": "Crimson Carriage",
-  "item.caryvan.warped_carriage": "Warped Carriage"
+  "item.caryvan.warped_carriage": "Warped Carriage",
+  "item.caryvan.oak_wheels": "Oak Wheels",
+  "item.caryvan.spruce_wheels": "Spruce Wheels",
+  "item.caryvan.birch_wheels": "Birch Wheels",
+  "item.caryvan.acacia_wheels": "Acacia Wheels",
+  "item.caryvan.cherry_wheels": "Cherry Wheels",
+  "item.caryvan.jungle_wheels": "Jungle Wheels",
+  "item.caryvan.dark_oak_wheels": "Dark Oak Wheels",
+  "item.caryvan.pale_oak_wheels": "Pale Oak Wheels",
+  "item.caryvan.mangrove_wheels": "Mangrove Wheels",
+  "item.caryvan.bamboo_wheels": "Bamboo Wheels",
+  "item.caryvan.crimson_wheels": "Crimson Wheels",
+  "item.caryvan.warped_wheels": "Warped Wheels",
+  "item.caryvan.broken_hand_cart": "Broken Hand Cart",
+  "item.caryvan.broken_animal_cart": "Broken Animal Cart",
+  "item.caryvan.broken_wagon": "Broken Wagon",
+  "item.caryvan.broken_carriage": "Broken Carriage",
+  "item.caryvan.broken_wheel": "Broken Wheel"
 }

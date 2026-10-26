@@ -4,15 +4,18 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
+import com.github.cerealklla.caryvan.registration.ModItems;
 import com.github.cerealklla.caryvan.util.CaryvanWorld;
 import com.github.cerealklla.caryvan.util.CartWheel;
 
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.EntityType;
@@ -20,9 +23,11 @@ import net.minecraft.world.entity.InterpolationHandler;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.vehicle.VehicleEntity;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.properties.WoodType;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.BlockHitResult;
@@ -406,6 +411,16 @@ public abstract class AbstractDrawnEntity extends VehicleEntity {
 
     public abstract Item getCartItem();
 
+    /**
+     * The generic (not wood-specific -- a wrecked cart no longer carries its original wood identity,
+     * same reasoning {@link com.github.cerealklla.caryvan.registration.ModItems#BROKEN_WHEEL} is a
+     * single item too) item a destroyed cart drops instead of its intact {@link #getCartItem()} --
+     * real user spec, 2026-10-26, matching a video reference of the original mod this was adapted
+     * from: a destroyed cart drops a repairable "Broken" item plus its own wheels (also broken), not
+     * the finished product outright.
+     */
+    public abstract Item getBrokenCartItem();
+
     public WoodType getWoodType() {
         return WoodType.values()
                 .filter(type -> type.name().equals(this.entityData.get(DATA_WOOD_TYPE)))
@@ -420,6 +435,28 @@ public abstract class AbstractDrawnEntity extends VehicleEntity {
     @Override
     protected Item getDropItem() {
         return this.getCartItem();
+    }
+
+    /**
+     * Overrides {@code VehicleEntity}'s own default (which would call {@link #getDropItem()} --
+     * the intact cart) to drop a "Broken" cart item plus one Broken Wheel per real wheel this cart
+     * has instead -- real user spec, 2026-10-26: "Broken Wheel and Broken Wagon, with a recipe to
+     * combine Broken with N Non-Broken Wheels to 'repair' the wagon, and the Broken Wheel -> Iron
+     * Ingots to scrap the broken wheels." Wheel count comes straight from {@link #wheels} (already
+     * tracked generically per cart type -- 2 for Hand Cart/Animal Cart, 4 for Wagon/Carriage), no new
+     * per-type count needed. Reuses the public {@code destroy(ServerLevel, Item)} for the cart body
+     * itself (same {@code ENTITY_DROPS} game-rule gate/kill sequence vanilla's own default already
+     * proves out), then separately spawns the wheels under that same gate.
+     */
+    @Override
+    protected void destroy(final ServerLevel level, final DamageSource source) {
+        final int wheelCount = this.wheels.size();
+        this.destroy(level, this.getBrokenCartItem());
+        if (level.getGameRules().get(GameRules.ENTITY_DROPS)) {
+            for (int i = 0; i < wheelCount; i++) {
+                this.spawnAtLocation(level, new ItemStack(ModItems.BROKEN_WHEEL.get()));
+            }
+        }
     }
 
     @Override

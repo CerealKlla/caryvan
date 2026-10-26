@@ -2,15 +2,13 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:birch_wheels",
+    "caryvan:birch_wheels",
+    "caryvan:birch_wheels",
+    "caryvan:birch_wheels",
     "minecraft:birch_planks",
     "minecraft:birch_planks",
-    "minecraft:birch_planks",
-    "minecraft:birch_planks",
-    "minecraft:birch_planks",
-    "minecraft:birch_planks",
-    "minecraft:birch_planks",
-    "minecraft:iron_ingot",
-    "minecraft:iron_ingot"
+    "minecraft:birch_planks"
   ],
   "result": {
     "id": "caryvan:birch_carriage"

@@ -90,6 +90,11 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
     }
 
     @Override
+    public Item getBrokenCartItem() {
+        return ModItems.BROKEN_CARRIAGE.get();
+    }
+
+    @Override
     public void tick() {
         super.tick();
         this.validateSeatOccupants();

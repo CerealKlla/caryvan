@@ -2,8 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:cherry_planks",
-    "minecraft:cherry_planks",
+    "caryvan:cherry_wheels",
+    "caryvan:cherry_wheels",
     "minecraft:cherry_planks",
     "minecraft:cherry_planks",
     "minecraft:cherry_planks"

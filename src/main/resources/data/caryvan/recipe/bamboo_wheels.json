@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:bamboo_planks",
+    "minecraft:bamboo_planks",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "caryvan:bamboo_wheels",
+    "count": 2
+  }
+}

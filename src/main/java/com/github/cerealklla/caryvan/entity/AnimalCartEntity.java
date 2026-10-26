@@ -62,6 +62,11 @@ public final class AnimalCartEntity extends AbstractDrawnInventoryEntity {
     }
 
     @Override
+    public Item getBrokenCartItem() {
+        return ModItems.BROKEN_ANIMAL_CART.get();
+    }
+
+    @Override
     public void tick() {
         super.tick();
         if (!(this.level() instanceof ServerLevel serverLevel)) {

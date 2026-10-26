@@ -2,8 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:pale_oak_planks",
-    "minecraft:pale_oak_planks",
+    "caryvan:pale_oak_wheels",
+    "caryvan:pale_oak_wheels",
     "minecraft:pale_oak_planks",
     "minecraft:pale_oak_planks",
     "minecraft:pale_oak_planks"

@@ -2,15 +2,13 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:dark_oak_wheels",
+    "caryvan:dark_oak_wheels",
+    "caryvan:dark_oak_wheels",
+    "caryvan:dark_oak_wheels",
     "minecraft:dark_oak_planks",
     "minecraft:dark_oak_planks",
-    "minecraft:dark_oak_planks",
-    "minecraft:dark_oak_planks",
-    "minecraft:dark_oak_planks",
-    "minecraft:dark_oak_planks",
-    "minecraft:dark_oak_planks",
-    "minecraft:iron_ingot",
-    "minecraft:iron_ingot"
+    "minecraft:dark_oak_planks"
   ],
   "result": {
     "id": "caryvan:dark_oak_carriage"

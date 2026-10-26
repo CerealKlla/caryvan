@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:warped_planks",
+    "minecraft:warped_planks",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "caryvan:warped_wheels",
+    "count": 2
+  }
+}

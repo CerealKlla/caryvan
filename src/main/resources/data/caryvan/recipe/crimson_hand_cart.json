@@ -2,8 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:crimson_planks",
-    "minecraft:crimson_planks",
+    "caryvan:crimson_wheels",
+    "caryvan:crimson_wheels",
     "minecraft:crimson_planks",
     "minecraft:crimson_planks",
     "minecraft:crimson_planks"

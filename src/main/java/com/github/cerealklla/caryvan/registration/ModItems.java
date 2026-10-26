@@ -42,6 +42,11 @@ public final class ModItems {
     private static final Map<WoodType, DeferredItem<WagonItem>> WAGONS = new HashMap<>();
     // Added 2026-10-26 alongside the new Carriage entity -- same shape as the three above.
     private static final Map<WoodType, DeferredItem<CarriageItem>> CARRIAGES = new HashMap<>();
+    // Wheels: a new wood-specific crafting intermediate (real user spec, 2026-10-26, matching a video
+    // reference of the mod this one was adapted from: "you actually crafted the wheels separately,
+    // and the wheels in conjunction with other stuff crafted the actual carts/wagons"). Plain Item,
+    // no custom class needed -- it's a pure crafting material, never placed/used directly.
+    private static final Map<WoodType, DeferredItem<Item>> WHEELS = new HashMap<>();
 
     static {
         WoodType.values().forEach(woodType -> {
@@ -65,8 +70,29 @@ public final class ModItems {
                     id -> new CarriageItem(new Item.Properties()
                             .stacksTo(1)
                             .setId(ResourceKey.create(Registries.ITEM, id)), woodType)));
+            WHEELS.put(woodType, ITEMS.register(
+                    woodType.name() + "_wheels",
+                    id -> new Item(new Item.Properties()
+                            .setId(ResourceKey.create(Registries.ITEM, id)))));
         });
     }
+
+    // "Broken" cart items -- real user spec, 2026-10-26: a destroyed cart drops one of these (plus
+    // Broken Wheels) instead of the intact cart item, repaired back with fresh matching Wheels.
+    // Deliberately NOT one-per-wood -- a wrecked cart no longer carries its original wood identity
+    // (the repair recipe restores it, picked by whichever wood's Wheels are used to fix it).
+    public static final DeferredItem<Item> BROKEN_HAND_CART = ITEMS.register(
+            "broken_hand_cart", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
+    public static final DeferredItem<Item> BROKEN_ANIMAL_CART = ITEMS.register(
+            "broken_animal_cart", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
+    public static final DeferredItem<Item> BROKEN_WAGON = ITEMS.register(
+            "broken_wagon", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
+    public static final DeferredItem<Item> BROKEN_CARRIAGE = ITEMS.register(
+            "broken_carriage", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
+    // A single generic item (not per-wood, not per-cart-type) -- a broken wheel is just scrap either
+    // way, whichever cart it came from.
+    public static final DeferredItem<Item> BROKEN_WHEEL = ITEMS.register(
+            "broken_wheel", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
 
     public static Item handCartFor(final WoodType woodType) {
         return HAND_CARTS.get(woodType).get();
@@ -82,5 +108,9 @@ public final class ModItems {
 
     public static Item carriageFor(final WoodType woodType) {
         return CARRIAGES.get(woodType).get();
+    }
+
+    public static Item wheelsFor(final WoodType woodType) {
+        return WHEELS.get(woodType).get();
     }
 }

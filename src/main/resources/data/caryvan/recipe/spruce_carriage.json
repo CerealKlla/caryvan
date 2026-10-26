@@ -2,15 +2,13 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:spruce_wheels",
+    "caryvan:spruce_wheels",
+    "caryvan:spruce_wheels",
+    "caryvan:spruce_wheels",
     "minecraft:spruce_planks",
     "minecraft:spruce_planks",
-    "minecraft:spruce_planks",
-    "minecraft:spruce_planks",
-    "minecraft:spruce_planks",
-    "minecraft:spruce_planks",
-    "minecraft:spruce_planks",
-    "minecraft:iron_ingot",
-    "minecraft:iron_ingot"
+    "minecraft:spruce_planks"
   ],
   "result": {
     "id": "caryvan:spruce_carriage"

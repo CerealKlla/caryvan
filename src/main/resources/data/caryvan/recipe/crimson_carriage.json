@@ -2,15 +2,13 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:crimson_wheels",
+    "caryvan:crimson_wheels",
+    "caryvan:crimson_wheels",
+    "caryvan:crimson_wheels",
     "minecraft:crimson_planks",
     "minecraft:crimson_planks",
-    "minecraft:crimson_planks",
-    "minecraft:crimson_planks",
-    "minecraft:crimson_planks",
-    "minecraft:crimson_planks",
-    "minecraft:crimson_planks",
-    "minecraft:iron_ingot",
-    "minecraft:iron_ingot"
+    "minecraft:crimson_planks"
   ],
   "result": {
     "id": "caryvan:crimson_carriage"

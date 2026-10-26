@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "caryvan:broken_hand_cart",
+    "caryvan:warped_wheels",
+    "caryvan:warped_wheels"
+  ],
+  "result": {
+    "id": "caryvan:warped_hand_cart"
+  }
+}

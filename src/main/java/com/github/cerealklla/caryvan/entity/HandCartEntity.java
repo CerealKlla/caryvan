@@ -48,6 +48,11 @@ public final class HandCartEntity extends AbstractDrawnInventoryEntity {
         return ModItems.handCartFor(this.getWoodType());
     }
 
+    @Override
+    public Item getBrokenCartItem() {
+        return ModItems.BROKEN_HAND_CART.get();
+    }
+
     /** Only a player's own right-click can hitch it -- no animal AI exists to make anything else want to grab one. */
     @Override
     protected boolean canBePulledBy(final Entity entity) {

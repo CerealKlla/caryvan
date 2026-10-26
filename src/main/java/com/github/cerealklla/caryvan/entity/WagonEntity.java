@@ -162,6 +162,11 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
     }
 
     @Override
+    public Item getBrokenCartItem() {
+        return ModItems.BROKEN_WAGON.get();
+    }
+
+    @Override
     public void tick() {
         super.tick();
         // Real user report, 2026-10-26: "my player model is always sitting in the left seat

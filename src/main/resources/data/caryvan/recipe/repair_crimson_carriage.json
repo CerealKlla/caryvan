@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "caryvan:broken_carriage",
+    "caryvan:crimson_wheels",
+    "caryvan:crimson_wheels",
+    "caryvan:crimson_wheels",
+    "caryvan:crimson_wheels"
+  ],
+  "result": {
+    "id": "caryvan:crimson_carriage"
+  }
+}

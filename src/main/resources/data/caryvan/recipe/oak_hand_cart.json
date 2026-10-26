@@ -2,8 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:oak_planks",
-    "minecraft:oak_planks",
+    "caryvan:oak_wheels",
+    "caryvan:oak_wheels",
     "minecraft:oak_planks",
     "minecraft:oak_planks",
     "minecraft:oak_planks"

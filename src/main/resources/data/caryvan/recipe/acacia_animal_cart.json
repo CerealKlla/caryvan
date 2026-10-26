@@ -2,12 +2,11 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
+    "caryvan:acacia_wheels",
+    "caryvan:acacia_wheels",
     "minecraft:acacia_planks",
     "minecraft:acacia_planks",
     "minecraft:acacia_planks",
-    "minecraft:acacia_planks",
-    "minecraft:acacia_planks",
-    "minecraft:iron_ingot",
     "minecraft:iron_ingot"
   ],
   "result": {

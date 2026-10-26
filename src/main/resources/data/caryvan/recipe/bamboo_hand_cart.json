@@ -2,8 +2,8 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    "minecraft:bamboo_planks",
-    "minecraft:bamboo_planks",
+    "caryvan:bamboo_wheels",
+    "caryvan:bamboo_wheels",
     "minecraft:bamboo_planks",
     "minecraft:bamboo_planks",
     "minecraft:bamboo_planks"

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:spruce_planks",
+    "minecraft:spruce_planks",
+    "minecraft:iron_ingot"
+  ],
+  "result": {
+    "id": "caryvan:spruce_wheels",
+    "count": 2
+  }
+}
