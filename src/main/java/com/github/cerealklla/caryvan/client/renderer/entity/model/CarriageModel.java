@@ -488,17 +488,23 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
      * the SAME local "along local X, pre-yRot-alignment" space {@link #wallSegment} itself builds in.
      */
     private static void addDoorDetails(final EasyMeshBuilder door, final float length, final float height) {
-        final float frameThickness = 0.8F;
-        final float frameDepth = 1.4F;
+        // Real fix, 2026-10-26: "I don't see a door or door frame anywhere" -- confirmed via a real
+        // getExtentsForGui bake check (not reasoning alone) that the first pass's own
+        // frameDepth=1.4 only protruded 0.2 units past the plain panel's own 1.0-unit thickness on
+        // each side (0.0125 blocks, under a quarter-inch) -- genuinely imperceptible at normal camera
+        // distance, on a part with no real painted texture detail to otherwise show contrast. These
+        // numbers are now a real, clearly-visible protrusion instead.
+        final float frameThickness = 1.5F;
+        final float frameDepth = 3.0F;
         final float frameZ = -frameDepth / 2.0F;
         door.addBox(-length / 2.0F, 0.0F, frameZ, length, frameThickness, frameDepth);
         door.addBox(-length / 2.0F, height - frameThickness, frameZ, length, frameThickness, frameDepth);
         door.addBox(-length / 2.0F, 0.0F, frameZ, frameThickness, height, frameDepth);
         door.addBox(length / 2.0F - frameThickness, 0.0F, frameZ, frameThickness, height, frameDepth);
 
-        final float handleSize = 0.8F;
-        final float handleX = -length / 2.0F + frameThickness + 1.0F;
-        door.addBox(handleX, height * 0.4F, -1.2F, handleSize, handleSize, handleSize);
+        final float handleSize = 1.2F;
+        final float handleX = -length / 2.0F + frameThickness + 1.5F;
+        door.addBox(handleX, height * 0.4F, -2.5F, handleSize, handleSize, handleSize);
     }
 
     /**

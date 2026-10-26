@@ -72,7 +72,13 @@ final class ModelGeometryTest {
         assertSpanAtLeast(body, "body", 0.5F, 0.5F, 2.0F);
         assertSpanAtLeast(body.getChild("roofBase"), "roofBase", 1.0F, 0.01F, 2.0F);
         assertSpanAtLeast(body.getChild("roofCrown"), "roofCrown", 0.5F, 0.01F, 1.0F);
-        assertSpanAtLeast(body.getChild("wallDoorLeft"), "wallDoorLeft", 0.01F, 0.2F, 0.3F);
+        // Real fix, 2026-10-26: the x-span threshold here is the one that actually matters for the
+        // door-frame/handle geometry specifically -- wallSegment's own yRot alignment maps the panel's
+        // local Z (thickness/protrusion axis) onto world X. The plain, undecorated panel alone is
+        // only 1 raw unit (0.0625 blocks) thick; a real frame-visibility regression (e.g. reverting to
+        // a too-thin protrusion) would still pass a loose 0.01 threshold, so this is set well above
+        // the bare-panel baseline specifically to catch that.
+        assertSpanAtLeast(body.getChild("wallDoorLeft"), "wallDoorLeft", 0.15F, 0.2F, 0.3F);
         assertSpanAtLeast(body.getChild("wallSkirtLeft"), "wallSkirtLeft", 0.01F, 0.1F, 0.3F);
         assertSpanAtLeast(body.getChild("hullCurlFrontLeft"), "hullCurlFrontLeft", 0.01F, 0.05F, 0.3F);
         assertSpanAtLeast(body.getChild("benchRiserLeft"), "benchRiserLeft", 0.01F, 0.3F, 0.01F);

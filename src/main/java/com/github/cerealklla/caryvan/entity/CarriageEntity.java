@@ -842,6 +842,18 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
     // raw Z [-48,-40] (pivot frontBenchZ=-40, box depth 8), center -44 raw = -2.75 blocks -> negated,
     // +2.75.
     private static final double FRONT_SEAT_Z = 2.75D;
+    // Real second fix, 2026-10-26, same live-test round as FRONT_SEAT_Z above: "my head when mounted
+    // is touching the underside of the bench" -- the Z-depth fix alone wasn't enough; the generic
+    // getBbHeight()*0.85 Y fraction every seat in this class shares (tuned against the OLD, much
+    // shorter cabin) now sits WAY below the real rebuilt bench. Real value, independently duplicated
+    // from CarriageModel's own current frontBenchSeat pivot (client-only ModelPart types can't be
+    // referenced from this common-sourceset class -- same reasoning #DOOR_Z_NEAR/FAR's own doc gives):
+    // world height above feet = -(bodyOrigin + benchBaseY) / 16, where bodyOrigin = -BACK_WHEEL_RADIUS
+    // = -11 and benchBaseY = WALL_TOP_Y(-24) - riserHeight(4) = -28 -> -(-11 + -28)/16 = 2.4375. Only
+    // the front bench (seatIndex 0/1) gets this dedicated value -- the roof/running-board companion
+    // seats (seatIndex 2-5) aren't tied to this specific model prop at all and keep the shared
+    // fraction, a separate concern not reported broken here.
+    private static final double FRONT_SEAT_Y = 2.4375D;
     private static final double INTERIOR_SEAT_1_Z = 0.0D;
     private static final double INTERIOR_SEAT_2_Z = -1.75D;
     private static final double[] SEAT_Z_BY_INDEX = {FRONT_SEAT_Z, FRONT_SEAT_Z, INTERIOR_SEAT_1_Z, INTERIOR_SEAT_1_Z, INTERIOR_SEAT_2_Z, INTERIOR_SEAT_2_Z};
@@ -879,7 +891,8 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         final boolean leftSide = seatIndex % 2 == 0;
         final double xOffset = leftSide ? SEAT_X_OFFSET : -SEAT_X_OFFSET;
         final double z = SEAT_Z_BY_INDEX[seatIndex];
-        final Vec3 local = new Vec3(xOffset, this.getBbHeight() * 0.85D, z).scale(scale);
+        final double y = seatIndex <= 1 ? FRONT_SEAT_Y : this.getBbHeight() * 0.85D;
+        final Vec3 local = new Vec3(xOffset, y, z).scale(scale);
         final float yawRad = (float) Math.toRadians(this.getYRot());
         return local.yRot(-yawRad);
     }
