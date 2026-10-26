@@ -113,6 +113,23 @@ public final class CarriageMenu extends AbstractContainerMenu {
         return clicked;
     }
 
+    /** Real GUI buttons, 2026-10-26 -- mirrors {@code WagonMenu#clickMenuButton}'s own doc exactly. */
+    @Override
+    public boolean clickMenuButton(final Player player, final int id) {
+        if (this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart) {
+            if (id == com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity.PICK_UP_BUTTON_ID) {
+                // See WagonMenu#clickMenuButton's own doc -- sends the confirm dialog, doesn't execute directly.
+                cart.requestPickUpConfirm(player);
+                return true;
+            }
+            if (id == com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity.REPAIR_BUTTON_ID) {
+                cart.handleRepairAttempt(player, player.getMainHandItem());
+                return true;
+            }
+        }
+        return super.clickMenuButton(player, id);
+    }
+
     @Override
     public boolean stillValid(final Player player) {
         return this.container.stillValid(player);

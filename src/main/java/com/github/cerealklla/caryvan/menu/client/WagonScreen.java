@@ -1,10 +1,12 @@
 package com.github.cerealklla.caryvan.menu.client;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
+import com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity;
 import com.github.cerealklla.caryvan.menu.WagonMenu;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -43,6 +45,35 @@ public final class WagonScreen extends AbstractContainerScreen<WagonMenu> {
         this.inventoryLabelY = this.imageHeight - 94;
         this.titleLabelX = CARGO_PANEL_X + 8;
         this.inventoryLabelX = CARGO_PANEL_X + 8;
+    }
+
+    /**
+     * Real "Pick Up"/"Repair" buttons, 2026-10-26 (health system work) -- stacked in the free space
+     * directly below the mount panel (that panel only spans {@code MOUNT_PANEL_WIDTH}x{@code
+     * MOUNT_PANEL_HEIGHT} starting at {@code MOUNT_PANEL_Y_OFFSET}; the cargo/player-inventory area
+     * sits in a completely different X range starting at {@code CARGO_PANEL_X}, so this space is
+     * genuinely free). Both route through vanilla's own real menu-button mechanism
+     * ({@code WagonMenu#clickMenuButton}, see its own doc) -- "Repair" fires immediately (no confirm
+     * needed); "Pick Up" also just fires the button click -- the server's own
+     * {@code #requestPickUpConfirm} is what actually sends back the real confirm dialog (a
+     * clientbound payload, handled in {@code CaryvanModClient}), not this click itself. Deliberately
+     * NOT opening {@link ConfirmActionScreen} directly from here: that would transition away from
+     * this screen immediately, which tears down the open container (confirmed against the real
+     * decompiled {@code Minecraft#setScreen}/{@code AbstractContainerScreen#removed}) before the
+     * player ever gets to click "Yes" -- see {@code OpenCartPickUpConfirmPayload}'s own doc for the
+     * full reasoning.
+     */
+    @Override
+    protected void init() {
+        super.init();
+        final int buttonX = this.leftPos;
+        final int buttonY = this.topPos + MOUNT_PANEL_Y_OFFSET + MOUNT_PANEL_HEIGHT + 4;
+        this.addRenderableWidget(Button.builder(Component.literal("Repair"), b ->
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, AbstractDamageableDrawnEntity.REPAIR_BUTTON_ID))
+                .bounds(buttonX, buttonY, MOUNT_PANEL_WIDTH, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Pick Up"), b ->
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, AbstractDamageableDrawnEntity.PICK_UP_BUTTON_ID))
+                .bounds(buttonX, buttonY + 24, MOUNT_PANEL_WIDTH, 20).build());
     }
 
     @Override

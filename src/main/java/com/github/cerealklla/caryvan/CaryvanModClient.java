@@ -13,13 +13,17 @@ import com.github.cerealklla.caryvan.client.renderer.entity.model.HandCartModel;
 import com.github.cerealklla.caryvan.client.renderer.entity.model.WagonModel;
 import com.github.cerealklla.caryvan.menu.client.AnimalCartScreen;
 import com.github.cerealklla.caryvan.menu.client.CarriageScreen;
+import com.github.cerealklla.caryvan.menu.client.ConfirmActionScreen;
 import com.github.cerealklla.caryvan.menu.client.WagonScreen;
+import com.github.cerealklla.caryvan.network.ConfirmCartPickUpPayload;
+import com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmPayload;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 import com.github.cerealklla.caryvan.registration.ModMenus;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.api.distmarker.Dist;
@@ -31,6 +35,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import org.lwjgl.glfw.GLFW;
 
 // This class will not load on dedicated servers. Accessing client side code from here is safe --
@@ -41,6 +46,37 @@ import org.lwjgl.glfw.GLFW;
 public class CaryvanModClient {
 
     public CaryvanModClient(ModContainer container) {
+    }
+
+    /**
+     * Registered here (not in the common {@code CaryvanMod}) specifically because the handler body
+     * references {@code Minecraft}/{@link ConfirmActionScreen} -- a client-only type reference
+     * inside a common-sourceset class's method would crash a dedicated server the instant that
+     * class is loaded during registry dispatch, per the root project's own CLAUDE.md, even though
+     * the handler itself would never actually run server-side. This whole class only ever loads on
+     * the client (see its own {@code Dist.CLIENT} annotation above), so there's no risk here.
+     */
+    @SubscribeEvent
+    static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
+        event.registrar("1").playToClient(OpenCartPickUpConfirmPayload.TYPE, OpenCartPickUpConfirmPayload.STREAM_CODEC,
+                (payload, context) -> onOpenPickUpConfirm(payload));
+    }
+
+    /**
+     * Opens the real "Are you sure?" {@link ConfirmActionScreen} for Pick Up -- the actual client-
+     * side half of {@code AbstractDamageableDrawnEntity#requestPickUpConfirm}. "Yes" sends {@link
+     * ConfirmCartPickUpPayload} back with the cart's real entity id (carried in the payload itself,
+     * not re-derived from any currently-open menu -- see {@code OpenCartPickUpConfirmPayload}'s own
+     * doc for why that matters); "No"/closing the screen does nothing.
+     */
+    private static void onOpenPickUpConfirm(OpenCartPickUpConfirmPayload payload) {
+        final String warning = payload.broken()
+                ? " Any Companions still aboard have a 50% chance each of being too wounded to retrieve."
+                : "";
+        Minecraft.getInstance().setScreen(new ConfirmActionScreen(
+                Component.literal("Pick Up Cart"),
+                Component.literal("Pick up this cart?" + warning),
+                () -> send(new ConfirmCartPickUpPayload(payload.cartEntityId()))));
     }
 
     // Hitch/unhitch no longer has its own keybind at all, 2026-10-25, explicit user correction --

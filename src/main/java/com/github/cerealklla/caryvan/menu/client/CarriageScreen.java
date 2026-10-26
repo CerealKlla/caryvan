@@ -1,10 +1,12 @@
 package com.github.cerealklla.caryvan.menu.client;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
+import com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity;
 import com.github.cerealklla.caryvan.menu.CarriageMenu;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -36,6 +38,20 @@ public final class CarriageScreen extends AbstractContainerScreen<CarriageMenu> 
         this.inventoryLabelY = this.imageHeight - 94;
         this.titleLabelX = CARGO_PANEL_X + 8;
         this.inventoryLabelX = CARGO_PANEL_X + 8;
+    }
+
+    /** Real "Pick Up"/"Repair" buttons -- mirrors {@code WagonScreen#init}'s own doc exactly, placed below the taller mount/seat panel here. */
+    @Override
+    protected void init() {
+        super.init();
+        final int buttonX = this.leftPos;
+        final int buttonY = this.topPos + MOUNT_PANEL_Y_OFFSET + MOUNT_PANEL_HEIGHT + 4;
+        this.addRenderableWidget(Button.builder(Component.literal("Repair"), b ->
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, AbstractDamageableDrawnEntity.REPAIR_BUTTON_ID))
+                .bounds(buttonX, buttonY, MOUNT_PANEL_WIDTH, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Pick Up"), b ->
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, AbstractDamageableDrawnEntity.PICK_UP_BUTTON_ID))
+                .bounds(buttonX, buttonY + 24, MOUNT_PANEL_WIDTH, 20).build());
     }
 
     @Override

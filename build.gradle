@@ -98,6 +98,12 @@ dependencies {
     // gated behind ModList.get().isLoaded("lyfe") at runtime, same isolation pattern as Kyt above.
     compileOnly files("../Lyfe/build/libs/lyfe-${lyfe_version}.jar")
 
+    // Yconomics is an optional soft dependency (see neoforge.mods.toml) -- the Wagon/Carriage
+    // health system's Pick Up action routes spilled cargo through Yconomics' own real
+    // bag.LootBagListener#depositOrScatter (see bridge.YconomicsLootBagBridge), gated behind
+    // ModList.get().isLoaded("yconomics") at runtime, same isolation pattern as Lyfe above.
+    compileOnly files("../Yconomics/build/libs/yconomics-${yconomics_version}.jar")
+
     // Plain JUnit 5 for pure logic tests (no live server/registry needed, so ModDevGradle's
     // neoForge { unitTest {} } FML-bootstrap machinery isn't required for those).
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'

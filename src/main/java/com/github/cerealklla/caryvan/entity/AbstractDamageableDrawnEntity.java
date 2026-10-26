@@ -108,14 +108,10 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     private long recentlyDamagedUntilMillis;
     private long passiveRepairUntilMillis;
 
-    // Pick Up confirmation -- real user spec: "There should be a warning before attempting [Pick Up
-    // or removing a Companion/Summon Stone from a broken wagon] that says 'Are you sure?' Yes/No."
-    // Implemented as a sneak+right-click-twice-within-5-seconds gesture (see each concrete subclass's
-    // own #interact override) rather than a dedicated confirm-dialog Screen -- a deliberate,
-    // time-boxed scope substitution for this pass; flagged in context/decisions.md.
-    private static final long PICK_UP_CONFIRM_WINDOW_MILLIS = 5000L;
-    private UUID pendingPickUpConfirmPlayer;
-    private long pendingPickUpConfirmUntil;
+    // Real GUI-menu button ids (AbstractContainerMenu#clickMenuButton) -- same ids used by
+    // WagonMenu/CarriageMenu's own override and by WagonScreen/CarriageScreen's buttons.
+    public static final int PICK_UP_BUTTON_ID = 0;
+    public static final int REPAIR_BUTTON_ID = 1;
 
     protected AbstractDamageableDrawnEntity(final EntityType<? extends AbstractDamageableDrawnEntity> entityType, final Level level) {
         super(entityType, level);
@@ -160,6 +156,33 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         // No-op -- a towed cart/wagon shouldn't go flying from a punch; its own chase physics
         // (#pulledTick()) is the sole real movement authority, same reasoning
         // WagonEntity#checkElasticInteractions already established for leash tension.
+    }
+
+    /**
+     * Real live-test regression, 2026-10-26: the towed mount (horse) itself was "very stuttery"
+     * after this migration, even though the wagon's own movement looked fine. Root cause, confirmed
+     * against the real decompiled source: {@code Entity#isPushable()} hardcodes {@code false} (what
+     * {@code VehicleEntity} -- which never overrides it -- always inherited, so the old cart could
+     * never be shoved by anything); {@code LivingEntity#isPushable()} instead overrides it to {@code
+     * isAlive() && !isSpectator() && !onClimbable()}, which evaluates {@code true} for this entity
+     * now. That made the cart itself newly shovable via {@code Entity#push(Entity)}'s own mutual
+     * push-apart physics -- and {@code LivingEntity#aiStep()} (run via {@code super.tick()}, see
+     * {@link #tick()}'s own doc for the identical-shaped interpolation bug this session already
+     * fixed) additionally calls {@code pushEntities()} every tick on both sides, a second push
+     * mechanism that never ran at all under plain {@code VehicleEntity} (which never calls {@code
+     * aiStep()}). With the mount sitting right at the harness position every tick, this produced a
+     * real tug-of-war between vanilla's new collision push-apart and the towing code's own harness-
+     * position hold -- exactly the reported stutter, isolated to the mount specifically (the cart's
+     * own position stays authoritative via {@link #pulledTick()} regardless). Restoring the exact
+     * old {@code VehicleEntity}/{@code Entity} default removes both push paths' effect on this
+     * entity at once -- {@link #tick()}'s own existing explicit {@code this.push(entity)} loop
+     * (ported from {@code AbstractDrawnEntity}, which already relied on this same hardcoded-false
+     * default) still runs unchanged and still lets the cart shove other entities out of its own way;
+     * only whether the cart itself can be shoved changes.
+     */
+    @Override
+    public boolean isPushable() {
+        return false;
     }
 
     /**
@@ -349,30 +372,38 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     }
 
     /**
-     * Owner-only, sneak+right-click with an empty hand -- arms a confirmation on the first press,
-     * executes on a second press within {@link #PICK_UP_CONFIRM_WINDOW_MILLIS}. Collapses the entity
-     * back into its item (intact {@link #getCartItem()}, or {@link #getBrokenCartItem()} while
-     * Broken), spills cargo onto the ground (see {@link #dumpCargoOnPickUp}), and lets the concrete
-     * subclass roll/despawn its own bound mounts/Companions (see {@link #onPickUp}).
+     * Owner-only, server-side-only. Sends {@code network.OpenCartPickUpConfirmPayload} directly to
+     * {@code player} -- real client-side code in {@code CaryvanModClient} receives it and opens the
+     * actual "Are you sure? Yes/No" {@code ConfirmActionScreen}. Both real trigger paths converge
+     * here: the owner sneak+right-clicking with an empty hand ({@code #interact}, which runs on both
+     * sides -- the {@code player instanceof ServerPlayer} check below is what makes calling this
+     * from the client-side invocation a harmless no-op, no separate {@code isClientSide()} check
+     * needed), and clicking "Pick Up" in the GUI ({@code AbstractContainerMenu#clickMenuButton},
+     * which only ever runs server-side already). This method itself never references any client-only
+     * type (the payload is plain data), so it's safe to call from this common-sourceset class.
      */
-    protected void handlePickUpAttempt(final net.minecraft.world.entity.player.Player player) {
-        if (!(this.level() instanceof ServerLevel level)) {
+    public void requestPickUpConfirm(final net.minecraft.world.entity.player.Player player) {
+        if (!this.isOwner(player) || !(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
             return;
         }
-        final long now = System.currentTimeMillis();
-        final boolean armed = player.getUUID().equals(this.pendingPickUpConfirmPlayer) && now < this.pendingPickUpConfirmUntil;
-        if (!armed) {
-            this.pendingPickUpConfirmPlayer = player.getUUID();
-            this.pendingPickUpConfirmUntil = now + PICK_UP_CONFIRM_WINDOW_MILLIS;
-            final String warning = this.isBroken()
-                    ? " Any Companions still aboard have a 50% chance each of being too wounded to retrieve."
-                    : "";
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    "Pick up this cart?" + warning + " Sneak+right-click again within 5 seconds to confirm."));
+        net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
+                new com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmPayload(this.getId(), this.isBroken()));
+    }
+
+    /**
+     * The actual Pick Up action -- called once confirmation has already happened (either the real
+     * "Yes" on the {@code ConfirmScreen} opened by {@link #requestPickUpConfirm}, routed back via
+     * {@code network.ConfirmCartPickUpPayload}, or directly from {@code
+     * AbstractContainerMenu#clickMenuButton} for the GUI button path, which only ever runs
+     * server-side after the player's own client-side "Yes" click). Re-checks ownership defensively
+     * either way. Collapses the entity back into its item (intact {@link #getCartItem()}, or {@link
+     * #getBrokenCartItem()} while Broken), spills cargo (see {@link #dumpCargoOnPickUp}), and lets
+     * the concrete subclass roll/despawn its own bound mounts/Companions (see {@link #onPickUp}).
+     */
+    public void executePickUp(final net.minecraft.world.entity.player.Player player) {
+        if (!this.isOwner(player) || !(this.level() instanceof ServerLevel level)) {
             return;
         }
-        this.pendingPickUpConfirmPlayer = null;
-        this.pendingPickUpConfirmUntil = 0L;
         final boolean broken = this.isBroken();
         this.onPickUp(level, broken);
         this.dumpCargoOnPickUp(level);
@@ -392,11 +423,30 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     }
 
     /**
+     * Real user spec, 2026-10-26 (access-gate correction): "The owner can always access the wagon
+     * inventory, no one else can unless the wagon is broken AND all companions are dead... When I
+     * say dead, I mean the entity walking around is killed and their summon stone/companion item is
+     * on cooldown." The owner bypasses this entirely (checked by the caller, see each concrete
+     * subclass's own {@code #createMenu}) -- this only governs a non-owner's access. The real "dead"
+     * signal is each companion/stone's own cooldown ({@link #hasLiveDefendingCompanion}), NOT
+     * {@code Entity#isAlive()} -- a companion dies via combat out in the world, entirely independent
+     * of this menu, so checking the cooldown (not a live-entity reference the menu itself would have
+     * to clear) has no circularity: there's nothing for opening this menu to depend on that only
+     * opening this menu could ever satisfy.
+     */
+    public boolean canNonOwnerAccessMenu() {
+        return !this.isBroken() || !this.hasLiveDefendingCompanion();
+    }
+
+    /** Whether any of this cart's Companion slots currently holds a stack that is NOT yet on cooldown (i.e. genuinely still alive/defending) -- see {@link #canNonOwnerAccessMenu}'s own doc. */
+    protected abstract boolean hasLiveDefendingCompanion();
+
+    /**
      * Owner-only, sneak+right-click while holding a matching Wheels item -- real Repair action (see
      * the approved plan's §5). Only valid while not {@link #isRecentlyDamaged()} and while at least
      * one wheel is broken; consumes up to {@code wheelsHeld} from the held stack.
      */
-    protected void handleRepairAttempt(final net.minecraft.world.entity.player.Player player, final net.minecraft.world.item.ItemStack heldWheels) {
+    public void handleRepairAttempt(final net.minecraft.world.entity.player.Player player, final net.minecraft.world.item.ItemStack heldWheels) {
         if (this.isRecentlyDamaged()) {
             player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
                     "This cart was recently damaged and can't be repaired yet."));
@@ -422,13 +472,28 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         return 1.2F;
     }
 
+    /**
+     * Real live-test regression, 2026-10-26: towing was "incredibly smooth" on Production (plain
+     * {@code VehicleEntity}/{@code Entity}, never auto-drives interpolation) but "very stuttery" on
+     * this {@code LivingEntity}-based rebuild. Root cause, confirmed against the real decompiled
+     * {@code LivingEntity#aiStep()}: it already calls {@code this.getInterpolation().interpolate()}
+     * itself whenever {@link #isInterpolating()} -- generically, for any {@code LivingEntity}, which
+     * this class now is -- via {@code super.tick()} just below (which reaches {@code LivingEntity
+     * #tick()}, which unconditionally calls {@code aiStep()} on both sides). The code ported verbatim
+     * from {@code AbstractDrawnEntity} (which genuinely needed this, since plain {@code Entity}/
+     * {@code VehicleEntity} never drive interpolation on their own) called {@link
+     * #interpolation}{@code .interpolate()} a SECOND time on the same client tick. Confirmed against
+     * {@code InterpolationHandler#interpolate()}'s own real source that this is NOT idempotent -- it
+     * decrements its own remaining-steps counter and re-bases its tracked previous position every
+     * call, so two calls in one real tick consumed two interpolation steps instead of one, finishing
+     * the smoothing sequence in 2/3 the intended time and producing exactly this uneven, stuttery
+     * motion. The explicit call here is simply redundant now and removed outright -- {@code
+     * super.tick()} already drives it correctly.
+     */
     @Override
     public void tick() {
         super.tick();
         if (this.level().isClientSide()) {
-            if (this.isInterpolating()) {
-                this.interpolation.interpolate();
-            }
             return;
         }
         tickRepairStateMachine();

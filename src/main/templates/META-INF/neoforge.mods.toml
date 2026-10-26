@@ -54,3 +54,13 @@ cargo and passengers. See context/design-document.md for the full design.
     reason="Animal-drawn carts summon their mount(s) via Lyfe's Summoning Stone mechanic."
     ordering="AFTER"
     side="BOTH"
+
+# Optional -- Wagon/Carriage Pick Up spills cargo through Yconomics' real Loot Bag mechanic instead
+# of plain ground drops when Yconomics is present. A Yconomics-less server just falls back to plain
+# vanilla item drops (see entity.AbstractDamageableDrawnInventoryEntity#dumpCargoOnPickUp).
+[[dependencies.${mod_id}]]
+    modId="yconomics"
+    type="optional"
+    reason="Wagon/Carriage Pick Up spills cargo into a real Yconomics Loot Bag instead of plain ground drops."
+    ordering="AFTER"
+    side="BOTH"

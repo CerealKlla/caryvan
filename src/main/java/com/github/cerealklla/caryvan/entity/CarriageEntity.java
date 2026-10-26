@@ -447,11 +447,13 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         if (player.isShiftKeyDown() && this.isOwner(player)) {
             final ItemStack held = player.getItemInHand(hand);
             if (held.isEmpty()) {
-                this.handlePickUpAttempt(player);
+                this.requestPickUpConfirm(player);
                 return InteractionResult.SUCCESS;
             }
             if (held.getItem() == ModItems.wheelsFor(this.getWoodType())) {
-                this.handleRepairAttempt(player, held);
+                if (!this.level().isClientSide()) {
+                    this.handleRepairAttempt(player, held);
+                }
                 return InteractionResult.SUCCESS;
             }
         }
@@ -585,7 +587,26 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
 
     @Override
     public AbstractContainerMenu createMenu(final int containerId, final Inventory inventory, final Player player) {
+        if (!this.isOwner(player) && !this.canNonOwnerAccessMenu()) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    "This carriage's Companions are still defending it -- they must be defeated first."));
+            return null;
+        }
         this.unpackChestVehicleLootTable(player);
         return new CarriageMenu(ModMenus.CARRIAGE.get(), containerId, inventory, this);
+    }
+
+    @Override
+    protected boolean hasLiveDefendingCompanion() {
+        for (final int slot : COMPANION_SLOTS) {
+            if (isLiveDefending(this.getItem(slot))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isLiveDefending(final ItemStack stack) {
+        return !stack.isEmpty() && LyfeSummoningBridge.isLoaded() && !LyfeSummoningBridge.isOnCooldown(stack, System.currentTimeMillis());
     }
 }

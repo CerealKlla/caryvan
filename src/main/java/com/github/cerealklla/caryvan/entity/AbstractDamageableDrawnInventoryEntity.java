@@ -149,13 +149,23 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
     }
 
     /**
-     * Spills real cargo onto the ground at Pick Up -- plain vanilla item drops, same as any broken
-     * chest-like entity. A Yconomics Loot Bag (the approved plan's original §5 design) was scoped
-     * out of this pass for time; flagged in context/decisions.md as a real, bounded follow-up (cargo
-     * is NOT lost either way, just not tidied into one bag).
+     * Spills real cargo at Pick Up -- through a real Yconomics Loot Bag
+     * ({@code bridge.YconomicsLootBagBridge#depositOrScatter}, see its own doc) when Yconomics is
+     * loaded, falling back to plain vanilla item drops otherwise (a Yconomics-less server has no
+     * bag mechanic to route through at all, but cargo is never lost either way).
      */
     @Override
     protected void dumpCargoOnPickUp(final ServerLevel level) {
-        Containers.dropContents(level, this, this);
+        if (com.github.cerealklla.caryvan.bridge.YconomicsLootBagBridge.isLoaded()) {
+            final net.minecraft.world.phys.Vec3 pos = this.position();
+            for (final ItemStack stack : this.getItemStacks()) {
+                if (!stack.isEmpty()) {
+                    com.github.cerealklla.caryvan.bridge.YconomicsLootBagBridge.depositOrScatter(level, pos, stack);
+                }
+            }
+            this.clearItemStacks();
+        } else {
+            Containers.dropContents(level, this, this);
+        }
     }
 }

@@ -682,19 +682,30 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
 
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
-        // Pick Up / Repair, 2026-10-26 (health system work) -- owner-only, sneak+right-click.
-        // Empty hand -> Pick Up (arm/confirm, see #handlePickUpAttempt's own doc); holding a Wheels
-        // item matching this wagon's own wood species -> Repair. Checked first, before the existing
+        // Pick Up / Repair, 2026-10-26 (health system work) -- owner-only, sneak+right-click is an
+        // alternate trigger for the same real GUI-button actions (see WagonScreen's own doc), not a
+        // substitute confirm mechanism -- the actual "Are you sure?" dialog is a real client-side
+        // ConfirmActionScreen, opened via #requestPickUpConfirm's own clientbound payload (never
+        // referenced directly here -- this method runs on both sides, and a client-only type
+        // reference here would crash a dedicated server on class load, per the root project's own
+        // CLAUDE.md -- #requestPickUpConfirm itself self-guards on `player instanceof ServerPlayer`,
+        // so calling it from this method's client-side invocation is already a harmless no-op with
+        // no extra `isClientSide()` check needed here). Holding a Wheels item matching this wagon's
+        // own wood species -> Repair (no confirm needed, matches the GUI button's own behavior) --
+        // this one DOES need the `isClientSide()` guard, since it mutates state directly rather than
+        // going through a self-guarding network call. Checked first, before the existing
         // sneak-falls-through-to-cargo behavior below -- a non-owner's sneak+right-click is
         // unaffected (still falls through to cargo, unchanged).
         if (player.isShiftKeyDown() && this.isOwner(player)) {
             final ItemStack held = player.getItemInHand(hand);
             if (held.isEmpty()) {
-                this.handlePickUpAttempt(player);
+                this.requestPickUpConfirm(player);
                 return InteractionResult.SUCCESS;
             }
             if (held.getItem() == ModItems.wheelsFor(this.getWoodType())) {
-                this.handleRepairAttempt(player, held);
+                if (!this.level().isClientSide()) {
+                    this.handleRepairAttempt(player, held);
+                }
                 return InteractionResult.SUCCESS;
             }
         }
@@ -939,17 +950,29 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         this.leadMount.move(MoverType.SELF, direction.scale(speed));
     }
 
-    // NOTE (2026-10-26, scope flag): the approved plan's spec -- "Only if all companions are
-    // killed would someone be able to gain access to the inventory of the wagon" once Broken -- is
-    // NOT enforced here. A gate on createMenu() was tried and reverted: it would block the ENTIRE
-    // menu, including the very CompanionSlot a player needs to reach to attempt removing a
-    // Companion in the first place (the 50%-destroy-or-keep-defending roll, see CompanionSlot's own
-    // doc) -- there would be no way to ever progress toward "all companions dead" at all. A correct
-    // fix needs cargo-slot-specific gating (e.g. a custom Slot#mayPickup override per cargo slot, or
-    // overriding WagonMenu#clicked), not attempted this pass -- flagged for follow-up.
+    /**
+     * Real user spec (access-gate correction, 2026-10-26): the owner always gets in; a non-owner
+     * only while NOT ({@code isBroken()} and a Companion is still genuinely alive -- see {@link
+     * #hasLiveDefendingCompanion}/{@link #canNonOwnerAccessMenu}'s own doc for why this is the real
+     * "dead" signal, not {@code Entity#isAlive()}, and why that closes off the earlier deadlock.
+     */
     @Override
     public AbstractContainerMenu createMenu(final int containerId, final Inventory inventory, final Player player) {
+        if (!this.isOwner(player) && !this.canNonOwnerAccessMenu()) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    "This wagon's Companions are still defending it -- they must be defeated first."));
+            return null;
+        }
         this.unpackChestVehicleLootTable(player);
         return new WagonMenu(ModMenus.WAGON.get(), containerId, inventory, this);
+    }
+
+    @Override
+    protected boolean hasLiveDefendingCompanion() {
+        return isLiveDefending(this.getItem(COMPANION_LEFT_SLOT)) || isLiveDefending(this.getItem(COMPANION_RIGHT_SLOT));
+    }
+
+    private static boolean isLiveDefending(final ItemStack stack) {
+        return !stack.isEmpty() && LyfeSummoningBridge.isLoaded() && !LyfeSummoningBridge.isOnCooldown(stack, System.currentTimeMillis());
     }
 }

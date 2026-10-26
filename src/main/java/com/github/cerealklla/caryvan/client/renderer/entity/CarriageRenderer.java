@@ -39,6 +39,13 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
     private static final Map<String, Identifier> TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + ".png")));
+    /** Health system, 2026-10-26 -- mirrors {@code WagonRenderer}'s own doc exactly. */
+    private static final Map<String, Identifier> WHEELS_DAMAGED_TEXTURES = WoodType.values()
+            .collect(Collectors.toMap(WoodType::name,
+                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + "_wheels_damaged.png")));
+    private static final Map<String, Identifier> BROKEN_TEXTURES = WoodType.values()
+            .collect(Collectors.toMap(WoodType::name,
+                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + "_broken.png")));
 
     private final CarriageModel model;
 
@@ -61,6 +68,8 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         state.wheelRotationRight = (float) entity.getWheelRotation(0);
         state.wheelRotationLeft = (float) entity.getWheelRotation(1);
         state.woodType = entity.getWoodType().name();
+        state.broken = entity.isBroken();
+        state.wheelsDamaged = entity.getBrokenWheelCount() > 0;
         buildLeashRopes(entity, state, partialTicks);
     }
 
@@ -99,7 +108,8 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - state.yRot));
         poseStack.scale(-1.0F, -1.0F, 1.0F);
         this.model.setupAnim(state);
-        final Identifier texture = TEXTURES.getOrDefault(state.woodType, TEXTURES.get(WoodType.OAK.name()));
+        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : state.wheelsDamaged ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
+        final Identifier texture = textureSet.getOrDefault(state.woodType, textureSet.get(WoodType.OAK.name()));
         final RenderType renderType = this.model.renderType(texture);
         submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,
                 OverlayTexture.NO_OVERLAY, -1, null, state.outlineColor, null);

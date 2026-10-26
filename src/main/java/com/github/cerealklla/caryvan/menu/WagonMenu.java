@@ -121,6 +121,35 @@ public final class WagonMenu extends AbstractContainerMenu {
         return clicked;
     }
 
+    /**
+     * Real GUI buttons, 2026-10-26 (health system work) -- {@code menu.client.WagonScreen}'s own
+     * "Pick Up"/"Repair" buttons route through here via vanilla's own real
+     * {@code ServerboundContainerButtonClickPacket} mechanism (confirmed against the real decompiled
+     * {@code MultiPlayerGameMode#handleInventoryButtonClick}/{@code AbstractContainerMenu
+     * #clickMenuButton}), which only ever runs server-side -- {@link #container} here is guaranteed
+     * the real live entity (only the CLIENT's own reconstructed menu uses a dummy
+     * {@code SimpleContainer}, and this method never executes there).
+     */
+    @Override
+    public boolean clickMenuButton(final Player player, final int id) {
+        if (this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart) {
+            if (id == com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity.PICK_UP_BUTTON_ID) {
+                // Sends the real confirm dialog (see #requestPickUpConfirm's own doc) -- does NOT
+                // execute Pick Up directly here. The menu is still genuinely open/valid at this
+                // exact instant (no screen transition has happened yet), but by the time the player
+                // actually clicks "Yes" on the dialog it won't be -- the follow-up confirm payload
+                // carries the entity id directly instead of depending on this menu still existing.
+                cart.requestPickUpConfirm(player);
+                return true;
+            }
+            if (id == com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity.REPAIR_BUTTON_ID) {
+                cart.handleRepairAttempt(player, player.getMainHandItem());
+                return true;
+            }
+        }
+        return super.clickMenuButton(player, id);
+    }
+
     @Override
     public boolean stillValid(final Player player) {
         return this.container.stillValid(player);

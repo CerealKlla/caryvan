@@ -8,4 +8,8 @@ public final class WagonRenderState extends EntityRenderState {
     public float wheelRotationLeft;
     public float wheelRotationRight;
     public String woodType;
+    /** Health system, 2026-10-26: at least one wheel is broken (but HP > 0) -- selects the "wheels damaged" texture variant. */
+    public boolean wheelsDamaged;
+    /** Health system, 2026-10-26: HP == 0 -- selects the full Broken-Wagon texture variant (takes priority over {@link #wheelsDamaged}). */
+    public boolean broken;
 }

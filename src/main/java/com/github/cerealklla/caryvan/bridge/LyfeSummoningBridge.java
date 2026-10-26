@@ -62,4 +62,14 @@ public final class LyfeSummoningBridge {
     public static void despawnCompanionCleanly(ServerLevel level, ItemStack stack) {
         com.github.cerealklla.lyfe.api.Lyfe.despawnCompanionCleanly(level, stack);
     }
+
+    /**
+     * Whether {@code stack}'s bound mount/companion is genuinely dead right now (its own real
+     * cooldown) -- the real "is this companion/stone dead" signal for the Wagon/Carriage access gate
+     * (real user spec, 2026-10-26: "When I say dead, I mean the entity walking around is killed and
+     * their summon stone/companion item is on cooldown"), not a live-entity-alive check.
+     */
+    public static boolean isOnCooldown(ItemStack stack, long nowEpochMillis) {
+        return com.github.cerealklla.lyfe.api.Lyfe.isOnCooldown(stack, nowEpochMillis);
+    }
 }
