@@ -53,15 +53,16 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     }
 
     @Override
+    /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly -- 4 independent wheels, same index order. */
     public void setupAnim(final CarriageRenderState state) {
-        this.leftWheelFront.xRot = state.wheelRotationLeft;
-        this.leftWheelBack.xRot = state.wheelRotationLeft;
-        this.rightWheelFront.xRot = state.wheelRotationRight;
-        this.rightWheelBack.xRot = state.wheelRotationRight;
-        this.leftWheelFront.visible = !state.wheelBrokenLeft;
-        this.leftWheelBack.visible = !state.wheelBrokenLeft;
-        this.rightWheelFront.visible = !state.wheelBrokenRight;
-        this.rightWheelBack.visible = !state.wheelBrokenRight;
+        this.leftWheelFront.xRot = state.wheelRotation[0];
+        this.rightWheelFront.xRot = state.wheelRotation[1];
+        this.leftWheelBack.xRot = state.wheelRotation[2];
+        this.rightWheelBack.xRot = state.wheelRotation[3];
+        this.leftWheelFront.visible = !state.wheelBroken[0];
+        this.rightWheelFront.visible = !state.wheelBroken[1];
+        this.leftWheelBack.visible = !state.wheelBroken[2];
+        this.rightWheelBack.visible = !state.wheelBroken[3];
     }
 
     public static LayerDefinition createLayer() {

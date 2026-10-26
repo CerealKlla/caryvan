@@ -74,19 +74,23 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         this.rightWheelBack = parts.getChild("rightWheelBack");
     }
 
+    /**
+     * Real bug fix, 2026-10-26: Wagon genuinely has 4 independent wheels (see {@code
+     * WagonRenderState#wheelRotation}'s own doc) -- each of the 4 real {@code ModelPart}s here now
+     * gets its own independent rotation/visibility from the matching array index (0 = leftFront,
+     * 1 = rightFront, 2 = leftBack, 3 = rightBack, matching this class's own child declaration order
+     * exactly), replacing the old left/right-shared-across-front-and-back pairing.
+     */
     @Override
     public void setupAnim(final WagonRenderState state) {
-        this.leftWheelFront.xRot = state.wheelRotationLeft;
-        this.leftWheelBack.xRot = state.wheelRotationLeft;
-        this.rightWheelFront.xRot = state.wheelRotationRight;
-        this.rightWheelBack.xRot = state.wheelRotationRight;
-        // Real live-test feedback, 2026-10-26: a texture recolor alone read as "nothing visibly
-        // changed" -- hiding the broken side's wheel geometry entirely is a far more legible signal.
-        // See WagonRenderState#wheelBrokenLeft/Right's own doc.
-        this.leftWheelFront.visible = !state.wheelBrokenLeft;
-        this.leftWheelBack.visible = !state.wheelBrokenLeft;
-        this.rightWheelFront.visible = !state.wheelBrokenRight;
-        this.rightWheelBack.visible = !state.wheelBrokenRight;
+        this.leftWheelFront.xRot = state.wheelRotation[0];
+        this.rightWheelFront.xRot = state.wheelRotation[1];
+        this.leftWheelBack.xRot = state.wheelRotation[2];
+        this.rightWheelBack.xRot = state.wheelRotation[3];
+        this.leftWheelFront.visible = !state.wheelBroken[0];
+        this.rightWheelFront.visible = !state.wheelBroken[1];
+        this.leftWheelBack.visible = !state.wheelBroken[2];
+        this.rightWheelBack.visible = !state.wheelBroken[3];
     }
 
     // Real user report, 2026-10-25: "lengthen the wagon by about 50%; the wheels are overlaping

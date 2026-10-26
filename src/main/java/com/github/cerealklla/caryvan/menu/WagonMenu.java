@@ -150,6 +150,29 @@ public final class WagonMenu extends AbstractContainerMenu {
         return super.clickMenuButton(player, id);
     }
 
+    /**
+     * Real live-test gap, 2026-10-26: removing a Companion/Summon Stone via a plain slot click
+     * rolled the 50%-destroy chance immediately while Broken, with no "Are you sure?" warning --
+     * only the GUI "Pick Up" button had one. {@code AbstractContainerMenu#clicked} is the single
+     * real entry point for EVERY click type, including shift-click (vanilla's own generic dispatch
+     * calls this entity's custom {@link #quickMoveStack} internally for a {@code QUICK_MOVE} click,
+     * so intercepting here covers both at once, confirmed against the real decompiled source) --
+     * cancel the click outright and send the real confirm dialog instead whenever it would remove a
+     * non-empty {@link CompanionSlot}'s item while Broken.
+     */
+    @Override
+    public void clicked(final int slotIndex, final int buttonNum, final net.minecraft.world.inventory.ContainerInput containerInput, final Player player) {
+        if (slotIndex >= 0 && slotIndex < this.slots.size()
+                && this.slots.get(slotIndex) instanceof CompanionSlot slot
+                && slot.hasItem()
+                && this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart
+                && cart.isBroken()) {
+            cart.requestCompanionSlotRemovalConfirm(player, slotIndex);
+            return;
+        }
+        super.clicked(slotIndex, buttonNum, containerInput, player);
+    }
+
     @Override
     public boolean stillValid(final Player player) {
         return this.container.stillValid(player);

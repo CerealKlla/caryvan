@@ -5,12 +5,11 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 /** Render state for {@code CarriageModel} -- same shape as {@code WagonRenderState}. */
 public final class CarriageRenderState extends EntityRenderState {
     public float yRot;
-    public float wheelRotationLeft;
-    public float wheelRotationRight;
+    /** Mirrors {@code WagonRenderState#wheelRotation}'s own doc exactly (same 4-wheel index order). */
+    public final float[] wheelRotation = new float[4];
     public String woodType;
     /** Health system, 2026-10-26: mirrors {@code WagonRenderState#broken}. */
     public boolean broken;
-    /** Health system, 2026-10-26: mirrors {@code WagonRenderState#wheelBrokenLeft}/{@code #wheelBrokenRight}. */
-    public boolean wheelBrokenLeft;
-    public boolean wheelBrokenRight;
+    /** Health system, 2026-10-26: mirrors {@code WagonRenderState#wheelBroken}. */
+    public final boolean[] wheelBroken = new boolean[4];
 }

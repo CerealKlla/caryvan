@@ -98,6 +98,8 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
 
     /** Who placed this cart -- captured once at placement (see each concrete item's own {@code use}), never changes. */
     private UUID ownerId;
+    /** The owner's real display name at placement time -- a plain cached String (not re-resolved from {@link #ownerId} every time, which would need an online/profile-cache lookup), surfaced via {@link #getDisplayName()} so the GUI's own title bar shows it -- real live-test request: "no way to confirm in-game who the game thinks owns a given wagon." */
+    private String ownerName;
 
     // Cumulative raw damage since the last full Repair -- the single source of truth the HP/Temp-Max-HP/
     // wheel-break state is all derived from (see #recomputeFromDamage's own doc for why NOT deriving
@@ -113,10 +115,47 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     public static final int PICK_UP_BUTTON_ID = 0;
     public static final int REPAIR_BUTTON_ID = 1;
 
+    /**
+     * Real bug, 2026-10-26: this used to hardcode exactly 2 {@link CartWheel}s, copy-pasted verbatim
+     * from {@code AbstractDrawnEntity} -- correct THERE (Hand Cart/Animal Cart really do have 2
+     * wheels, confirmed from their own models during the earlier Wheels-recipe-rework session), but
+     * this class is the base for Wagon/Carriage specifically, which both have 4 real wheels --
+     * confirmed independently two ways: that same Wheels-rework session's own repair recipes already
+     * require 4 Wheels items for a Wagon/Carriage ("wheel count confirmed from WagonModel"), and
+     * {@code WagonModel}/{@code CarriageModel} both declare 4 real wheel {@code ModelPart}s
+     * (`leftWheelFront`/`rightWheelFront`/`leftWheelBack`/`rightWheelBack`, in that order -- matched
+     * by index below: 0/1/2/3). The 2-wheel version silently broke the whole health system's wheel-
+     * break math (it only ever had 2 slots to mark broken, each requiring 50%+ cumulative damage,
+     * instead of 4 slots at a correct 25% each) -- the renderer/menu code (see {@code
+     * WagonRenderer#extractRenderState}'s own updated doc) also needed updating to match, not just
+     * this list. Offsets are placeholder-approximate (cosmetic -- only affects where rolling-dust
+     * particles spawn, not any rotation/physics math, which is driven by real travel distance
+     * regardless), sized relative to each concrete type's own real hitbox width via {@link
+     * #getWheelTrackHalfWidth()}/{@link #getWheelAxleHalfSpacing()}.
+     */
     protected AbstractDamageableDrawnEntity(final EntityType<? extends AbstractDamageableDrawnEntity> entityType, final Level level) {
         super(entityType, level);
         this.blocksBuilding = true;
-        this.wheels = Arrays.asList(new CartWheel(this, 0.9F), new CartWheel(this, -0.9F));
+        final float trackX = this.getWheelTrackHalfWidth();
+        final float axleZ = this.getWheelAxleHalfSpacing();
+        this.wheels = Arrays.asList(
+                new CartWheel(this, trackX, -axleZ, WHEEL_CIRCUMFERENCE),   // 0: leftFront
+                new CartWheel(this, -trackX, -axleZ, WHEEL_CIRCUMFERENCE),  // 1: rightFront
+                new CartWheel(this, trackX, axleZ, WHEEL_CIRCUMFERENCE),    // 2: leftBack
+                new CartWheel(this, -trackX, axleZ, WHEEL_CIRCUMFERENCE));  // 3: rightBack
+    }
+
+    /** Same default circumference the old 2-arg {@code CartWheel} constructor used. */
+    private static final float WHEEL_CIRCUMFERENCE = (float) (10 * Math.PI * 2 / 16);
+
+    /** Half the real hitbox width, roughly -- how far left/right each wheel sits from center. Overridden per concrete type to roughly match its own real hitbox size. */
+    protected float getWheelTrackHalfWidth() {
+        return 0.75F;
+    }
+
+    /** How far forward/back each axle sits from center. Overridden per concrete type to roughly match its own real hitbox size. */
+    protected float getWheelAxleHalfSpacing() {
+        return 0.75F;
     }
 
     /** Mirrors {@code ArmorStand.createAttributes()}/{@code GuardEntity.createAttributes()}'s own real registration pattern -- every {@code LivingEntity} subclass needs one, registered in {@code CaryvanMod#registerAttributes}. */
@@ -237,12 +276,27 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         return this.ownerId;
     }
 
-    public void setOwnerId(final UUID ownerId) {
-        this.ownerId = ownerId;
+    /** Captures both the owner's id and their real display name at placement time -- see {@link #ownerName}'s own doc for why the name is cached, not re-resolved later. */
+    public void setOwner(final net.minecraft.world.entity.player.Player player) {
+        this.ownerId = player.getUUID();
+        this.ownerName = player.getName().getString();
     }
 
     public boolean isOwner(final net.minecraft.world.entity.player.Player player) {
         return this.ownerId != null && this.ownerId.equals(player.getUUID());
+    }
+
+    /**
+     * Surfaces the owner's name directly in the GUI's own title bar (confirmed this already flows
+     * through to the client unchanged -- {@code MenuProvider#getDisplayName()}'s return value is
+     * what the vanilla menu-open packet sends as the screen's title, no new network code needed).
+     */
+    @Override
+    public net.minecraft.network.chat.Component getDisplayName() {
+        if (this.ownerName == null) {
+            return super.getDisplayName();
+        }
+        return net.minecraft.network.chat.Component.literal(super.getDisplayName().getString() + " (Owner: " + this.ownerName + ")");
     }
 
     public boolean isRecentlyDamaged() {
@@ -254,10 +308,9 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     /**
      * Fully replaces vanilla's own {@code actuallyHurt} (armor/absorption/knockback bookkeeping that
      * doesn't apply to a cart) with this entity's own cumulative-damage model. {@link
-     * #totalDamageTaken} -- not a value derived from {@link #getHealth()} -- is the single source of
-     * truth for both the wheel-break count and the resulting HP/Temp-Max-HP; deriving from
-     * {@code getHealth()} directly would cascade incorrectly, since lowering Temp Max HP itself
-     * forces {@link #setHealth} to re-clamp downward with no new "real" damage having occurred.
+     * #totalDamageTaken} is tracked purely to decide the wheel-break threshold -- health itself is
+     * applied directly below (real live-test bug, 2026-10-26: see {@link #recomputeHealthAndMax()}'s
+     * own doc for why deriving health from {@code base - totalDamageTaken} every time was wrong).
      */
     @Override
     protected void actuallyHurt(final ServerLevel level, final DamageSource source, final float dmg) {
@@ -268,6 +321,10 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         this.totalDamageTaken = Mth.clamp(this.totalDamageTaken + dmg, 0.0F, base);
         this.recentlyDamagedUntilMillis = System.currentTimeMillis() + RECENTLY_DAMAGED_MILLIS;
         this.passiveRepairUntilMillis = 0L;
+        // The real hit itself -- applied directly to health, independent of the wheel-break
+        // recompute below. setHealth() clamps internally to [0, current max], so this alone can
+        // never raise health, only lower it.
+        this.setHealth(this.getHealth() - dmg);
 
         final int wheelCount = this.wheels.size();
         if (wheelCount > 0) {
@@ -296,22 +353,43 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         this.entityData.set(DATA_BROKEN_WHEEL_MASK, mask);
     }
 
-    /** Temp Max HP = (base / wheelCount) * functionalWheelCount, per the approved plan's exact formula -- then re-derives current HP from {@link #totalDamageTaken} against that new ceiling. */
+    /**
+     * Sets the Temp Max HP ceiling (= {@code (base / wheelCount) * functionalWheelCount}, per the
+     * approved plan's exact formula) and clamps current health DOWN into it if it now exceeds the
+     * new ceiling -- never raises health.
+     *
+     * <p><b>Real live-test bug, 2026-10-26</b>: this used to unconditionally call {@code
+     * setHealth(base - totalDamageTaken)} every time, recomputing health from scratch off the
+     * cumulative-damage tracker. At the EXACT instant a wheel-break threshold is crossed (e.g. 2 of
+     * 4 wheels break at precisely 50% cumulative damage), {@code base - totalDamageTaken} and the
+     * brand-new, just-lowered {@code tempMax} are mathematically IDENTICAL (both derive from the
+     * same fractional-damage value) -- so health would read as exactly 100% of the new, lower
+     * ceiling at that instant, which looks exactly like "the health bar snapped back to full" even
+     * though the real/absolute HP never actually increased. Fixed by decoupling health from {@link
+     * #totalDamageTaken} entirely: {@link #actuallyHurt} now applies real damage directly to health,
+     * {@link #tickRepairStateMachine()}'s Passive Repair heal now applies its own heal directly to
+     * health, and this method's only remaining job is to move the ceiling and clamp health down into
+     * it if needed -- raising health is now exclusively Passive Repair's own explicit job, never an
+     * automatic side effect of a wheel breaking OR of {@link #repair} raising the ceiling back up.
+     */
     private void recomputeHealthAndMax() {
         final float base = this.getBaseMaxHealth();
         final int wheelCount = this.wheels.size();
         final float tempMax = wheelCount > 0
                 ? (base / wheelCount) * (wheelCount - this.brokenWheelCount)
                 : base;
+        // A hard floor of 1.0 -- an attribute base value of exactly 0 is untested territory vanilla
+        // never exercises (every real LivingEntity always has positive max health); this still
+        // reads/renders as fully broken (health itself still clamps to 0 below) without risking
+        // undefined attribute behavior at a literal zero ceiling.
+        final float clampedTempMax = Math.max(1.0F, tempMax);
         final var maxHealthAttribute = this.getAttribute(Attributes.MAX_HEALTH);
         if (maxHealthAttribute != null) {
-            // A hard floor of 1.0 -- an attribute base value of exactly 0 is untested territory
-            // vanilla never exercises (every real LivingEntity always has positive max health); this
-            // still reads/renders as fully broken (health itself still clamps to 0 below) without
-            // risking undefined attribute behavior at a literal zero ceiling.
-            maxHealthAttribute.setBaseValue(Math.max(1.0, tempMax));
+            maxHealthAttribute.setBaseValue(clampedTempMax);
         }
-        this.setHealth(base - this.totalDamageTaken);
+        if (this.getHealth() > clampedTempMax) {
+            this.setHealth(clampedTempMax);
+        }
     }
 
     /**
@@ -337,12 +415,17 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         if (this.passiveRepairUntilMillis > 0L) {
             if (now >= this.passiveRepairUntilMillis) {
                 this.passiveRepairUntilMillis = 0L;
-            } else if (this.totalDamageTaken > 0.0F) {
+            } else if (this.getHealth() < this.getMaxHealth()) {
+                // Gated on real current health vs. the real current ceiling -- NOT totalDamageTaken,
+                // which can now legitimately diverge from health (see #recomputeHealthAndMax's own
+                // doc: a wheel-break clamp-down lowers health without touching totalDamageTaken).
                 final float healPerTick = (PASSIVE_REPAIR_FRACTION_OF_BASE * this.getBaseMaxHealth()) / (PASSIVE_REPAIR_MILLIS / 50L);
                 this.totalDamageTaken = Math.max(0.0F, this.totalDamageTaken - healPerTick);
+                // The actual heal -- applied directly to health (setHealth clamps to the current
+                // real ceiling on its own, so this can never overheal past it).
+                this.setHealth(this.getHealth() + healPerTick);
                 // Deliberately does NOT touch #brokenWheelCount -- passive healing restores HP only,
                 // never un-breaks a wheel; that's exclusively Repair's job (see #repair).
-                recomputeHealthAndMax();
             }
         }
     }
@@ -424,8 +507,25 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * which only ever runs server-side already). This method itself never references any client-only
      * type (the payload is plain data), so it's safe to call from this common-sourceset class.
      */
+    /**
+     * Real gap, 2026-10-26: this never actually enforced the user's own explicit spec -- "Pick Up
+     * should be disabled/blocked unless the wagon is at exactly full HP (100%) or exactly 0 HP
+     * (fully Broken); any intermediate damage state should NOT allow Pick Up" (picking up a
+     * partially-damaged wagon as a plain item with no HP persisted on the item itself would
+     * otherwise be a free full-repair exploit). Checked here (before ever sending the confirm
+     * dialog) and defensively again in {@link #executePickUp}.
+     */
+    public boolean canPickUp() {
+        return this.isBroken() || this.getHealth() >= this.getMaxHealth();
+    }
+
     public void requestPickUpConfirm(final net.minecraft.world.entity.player.Player player) {
         if (!this.isOwner(player) || !(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            return;
+        }
+        if (!this.canPickUp()) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    "This cart can only be picked up at full health or once fully Broken -- repair it the rest of the way, or let it break."));
             return;
         }
         net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
@@ -443,7 +543,7 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * the concrete subclass roll/despawn its own bound mounts/Companions (see {@link #onPickUp}).
      */
     public void executePickUp(final net.minecraft.world.entity.player.Player player) {
-        if (!this.isOwner(player) || !(this.level() instanceof ServerLevel level)) {
+        if (!this.isOwner(player) || !this.canPickUp() || !(this.level() instanceof ServerLevel level)) {
             return;
         }
         final boolean broken = this.isBroken();
@@ -454,6 +554,68 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             this.spawnAtLocation(level, result);
         }
         this.discard();
+    }
+
+    /**
+     * Real live-test gap, 2026-10-26: removing a Companion/Summon Stone via a plain inventory-slot
+     * click (not the GUI "Pick Up" button) rolled the 50%-destroy chance immediately, with no
+     * warning -- real user spec: the warning must gate "any attempt to remove a Companion/Summon
+     * Stone item from its slot while isBroken() is true, not just from the Pick Up button's own
+     * flow." Mirrors {@link #requestPickUpConfirm}'s own real dialog mechanism exactly, just keyed
+     * to a specific slot index instead of the whole cart. {@code WagonMenu}/{@code CarriageMenu
+     * #clicked} is the real interception point (see its own doc) -- this method is only ever called
+     * once that's already confirmed the click would otherwise remove a non-empty Companion slot
+     * while Broken.
+     */
+    public void requestCompanionSlotRemovalConfirm(final net.minecraft.world.entity.player.Player player, final int slotIndex) {
+        if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            return;
+        }
+        net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
+                new com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmPayload(this.getId(), slotIndex));
+    }
+
+    /**
+     * The actual removal, performed directly server-side once the player clicks "Yes" (the original
+     * slot click that triggered the dialog was cancelled outright, never retried). Rolls the real
+     * 50%-destroy chance (only while still {@link #isBroken()} at the moment of confirmation -- if
+     * the cart was repaired in the meantime, no risk at all, matching the clarified risk model
+     * exactly) against the live Companion riding at {@code slotIndex} (see {@link
+     * #getCompanionEntityForSlot(int)}), then either clean-despawns it (success) or discards the
+     * live entity and leaves the player with nothing (failure) -- mirrors {@code
+     * menu.CompanionSlot#onTake}'s own roll exactly, kept there too as a defense-in-depth safety net
+     * for any path that isn't this one.
+     */
+    public void confirmCompanionSlotRemoval(final net.minecraft.world.entity.player.Player player, final int slotIndex) {
+        if (!(this.level() instanceof ServerLevel level) || !(this instanceof net.minecraft.world.entity.vehicle.ContainerEntity container)) {
+            return;
+        }
+        final net.minecraft.world.item.ItemStack stack = container.getItem(slotIndex);
+        if (stack.isEmpty()) {
+            return;
+        }
+        final Entity companion = this.getCompanionEntityForSlot(slotIndex);
+        if (this.isBroken() && level.getRandom().nextFloat() < 0.5F) {
+            if (companion != null) {
+                companion.discard();
+            }
+            container.setItem(slotIndex, net.minecraft.world.item.ItemStack.EMPTY);
+            player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    "The Companion was too wounded to retrieve."));
+            return;
+        }
+        if (com.github.cerealklla.caryvan.bridge.LyfeSummoningBridge.isLoaded()) {
+            com.github.cerealklla.caryvan.bridge.LyfeSummoningBridge.despawnCompanionCleanly(level, stack);
+        }
+        final net.minecraft.world.item.ItemStack removed = container.removeItemNoUpdate(slotIndex);
+        if (!player.getInventory().add(removed)) {
+            player.drop(removed, false);
+        }
+    }
+
+    /** Which live Companion entity (if any) currently occupies {@code slotIndex} -- overridden per concrete type, since slot layout differs between Wagon (2 slots) and Carriage (6). */
+    protected Entity getCompanionEntityForSlot(final int slotIndex) {
+        return null;
     }
 
     /** Hook for the concrete subclass to roll/despawn its own bound mounts/Companions on Pick Up -- no-op by default. */
@@ -761,6 +923,7 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         this.pullingUUID = input.read("PullingUUID", UUIDUtil.CODEC).orElse(null);
         this.entityData.set(DATA_WOOD_TYPE, input.read("WoodType", com.mojang.serialization.Codec.STRING).orElse(WoodType.OAK.name()));
         this.ownerId = input.read("OwnerId", UUIDUtil.CODEC).orElse(null);
+        this.ownerName = input.getString("OwnerName").orElse(null);
         this.totalDamageTaken = input.getFloatOr("TotalDamageTaken", 0.0F);
         this.brokenWheelCount = input.getIntOr("BrokenWheelCount", 0);
         this.recentlyDamagedUntilMillis = input.getLongOr("RecentlyDamagedUntilMillis", 0L);
@@ -775,6 +938,9 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         output.storeNullable("PullingUUID", UUIDUtil.CODEC, this.pullingUUID);
         output.store("WoodType", com.mojang.serialization.Codec.STRING, this.entityData.get(DATA_WOOD_TYPE));
         output.storeNullable("OwnerId", UUIDUtil.CODEC, this.ownerId);
+        if (this.ownerName != null) {
+            output.putString("OwnerName", this.ownerName);
+        }
         output.putFloat("TotalDamageTaken", this.totalDamageTaken);
         output.putInt("BrokenWheelCount", this.brokenWheelCount);
         output.putLong("RecentlyDamagedUntilMillis", this.recentlyDamagedUntilMillis);

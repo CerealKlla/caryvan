@@ -62,12 +62,12 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         super.extractRenderState(entity, state, partialTicks);
         state.yRot = Mth.rotLerp(partialTicks, entity.yRotO, entity.getYRot());
         entity.tickWheelsClient();
-        state.wheelRotationRight = (float) entity.getWheelRotation(0);
-        state.wheelRotationLeft = (float) entity.getWheelRotation(1);
+        for (int i = 0; i < state.wheelRotation.length; i++) {
+            state.wheelRotation[i] = (float) entity.getWheelRotation(i);
+            state.wheelBroken[i] = entity.isWheelBroken(i);
+        }
         state.woodType = entity.getWoodType().name();
         state.broken = entity.isBroken();
-        state.wheelBrokenRight = entity.isWheelBroken(0);
-        state.wheelBrokenLeft = entity.isWheelBroken(1);
         buildLeashRopes(entity, state, partialTicks);
     }
 

@@ -114,6 +114,13 @@ public class CaryvanMod {
                         com.github.cerealklla.caryvan.network.ConfirmCartPickUpPayload.handle(player, payload.cartEntityId());
                     }
                 });
+        registrar.playToServer(com.github.cerealklla.caryvan.network.ConfirmSlotRemovalPayload.TYPE,
+                com.github.cerealklla.caryvan.network.ConfirmSlotRemovalPayload.STREAM_CODEC,
+                (payload, context) -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        com.github.cerealklla.caryvan.network.ConfirmSlotRemovalPayload.handle(player, payload.cartEntityId(), payload.slotIndex());
+                    }
+                });
     }
 
     /** The one place {@link AbstractDrawnEntity#pulledTick()} is actually called -- see {@link CaryvanWorld}'s own doc for why. */

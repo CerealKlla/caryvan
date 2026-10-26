@@ -256,8 +256,18 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        tickLeadSlot(serverLevel);
-        tickTeamSlot(serverLevel);
+        // Real live-test bug, 2026-10-26: mounts were discarded once by #onEnterBrokenState's own
+        // despawnMountCleanly call, then immediately RE-SUMMONED the very next tick anyway, since
+        // that despawn is deliberately cooldown-free (see LyfeSummoningBridge#despawnMountCleanly's
+        // own doc) and this method never checked isBroken() at all -- "horses never actually
+        // despawned" was really "they despawned and instantly came back." Gating both slots here
+        // also directly satisfies the user's own explicit follow-up spec: "they should not respawn
+        // if the wagon is broken either" -- no ticking at all means no summon attempt at all, for
+        // either slot, for as long as the wagon stays Broken.
+        if (!this.isBroken()) {
+            tickLeadSlot(serverLevel);
+            tickTeamSlot(serverLevel);
+        }
         tickCompanionSlots(serverLevel);
         syncTeamLeash();
         syncWagonPullTarget();
@@ -756,7 +766,10 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
                 "[cart-mount-debug] interact() gate check by {} -- shiftHeld={}, passengers={}, hasRoom={}, locationY={} (needs > {}), bbHeight={}",
                 player.getName().getString(), shiftHeld, this.getPassengers().size(), hasRoom, location.y,
                 this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION, this.getBbHeight());
-        if (!shiftHeld && hasRoom
+        // Real live-test bug, 2026-10-26: a Broken (0 HP) wagon could still be mounted/driven --
+        // "broken means broken, you shouldn't be able to drive it no matter what's hitched to it."
+        // Independent of whether a mount happens to be attached (see #tick's own fix for that side).
+        if (!this.isBroken() && !shiftHeld && hasRoom
                 && location.y > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
             final boolean alreadyRiding = this.hasPassenger(player);
             final boolean wantsLeft = this.isLeftSideClick(player);
@@ -974,5 +987,16 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
 
     private static boolean isLiveDefending(final ItemStack stack) {
         return !stack.isEmpty() && LyfeSummoningBridge.isLoaded() && !LyfeSummoningBridge.isOnCooldown(stack, System.currentTimeMillis());
+    }
+
+    @Override
+    protected Entity getCompanionEntityForSlot(final int slotIndex) {
+        if (slotIndex == COMPANION_LEFT_SLOT) {
+            return this.companionLeft;
+        }
+        if (slotIndex == COMPANION_RIGHT_SLOT) {
+            return this.companionRight;
+        }
+        return null;
     }
 }

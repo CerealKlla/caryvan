@@ -92,6 +92,17 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         return BASE_MAX_HEALTH;
     }
 
+    /** Carriage's real hitbox is bigger than Wagon's (2.6 vs 2.0 wide) -- see {@code AbstractDamageableDrawnEntity}'s own doc for why this exists. */
+    @Override
+    protected float getWheelTrackHalfWidth() {
+        return 0.95F;
+    }
+
+    @Override
+    protected float getWheelAxleHalfSpacing() {
+        return 0.95F;
+    }
+
     @Override
     protected double getSpacing() {
         return SPACING_BLOCKS;
@@ -160,8 +171,12 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        tickLeadSlot(serverLevel);
-        tickTeamSlot(serverLevel);
+        // See WagonEntity#tick's own doc for the real re-summon bug this fixes, and the explicit
+        // user spec it also satisfies ("they should not respawn if the wagon is broken either").
+        if (!this.isBroken()) {
+            tickLeadSlot(serverLevel);
+            tickTeamSlot(serverLevel);
+        }
         tickCompanionSlots(serverLevel);
         syncTeamLeash();
         syncWagonPullTarget();
@@ -459,7 +474,8 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         }
         final boolean leftFree = this.leftSeatOccupant == null && this.companions[0] == null;
         final boolean rightFree = this.rightSeatOccupant == null && this.companions[1] == null;
-        if (!player.isShiftKeyDown() && (leftFree || rightFree)
+        // See WagonEntity#interact's own doc -- a Broken carriage must never be drivable.
+        if (!this.isBroken() && !player.isShiftKeyDown() && (leftFree || rightFree)
                 && location.y > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
             final boolean alreadyRiding = this.hasPassenger(player);
             final boolean wantsLeft = this.isLeftSideClick(player);
@@ -608,5 +624,15 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
 
     private static boolean isLiveDefending(final ItemStack stack) {
         return !stack.isEmpty() && LyfeSummoningBridge.isLoaded() && !LyfeSummoningBridge.isOnCooldown(stack, System.currentTimeMillis());
+    }
+
+    @Override
+    protected Entity getCompanionEntityForSlot(final int slotIndex) {
+        for (int i = 0; i < COMPANION_SLOTS.length; i++) {
+            if (COMPANION_SLOTS[i] == slotIndex) {
+                return this.companions[i];
+            }
+        }
+        return null;
     }
 }

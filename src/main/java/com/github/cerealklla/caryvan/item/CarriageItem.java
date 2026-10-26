@@ -74,7 +74,7 @@ public final class CarriageItem extends Item {
 
         final var damageable = (com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) cart;
         damageable.setWoodType(this.woodType);
-        damageable.setOwnerId(player.getUUID());
+        damageable.setOwner(player);
         level.addFreshEntity(cart);
         level.playSound(null, cart.getX(), cart.getY(), cart.getZ(), SoundEvents.WOOD_PLACE, SoundSource.BLOCKS, 0.75F, 0.8F);
         if (!player.getAbilities().instabuild) {

@@ -16,7 +16,9 @@ import com.github.cerealklla.caryvan.menu.client.CarriageScreen;
 import com.github.cerealklla.caryvan.menu.client.ConfirmActionScreen;
 import com.github.cerealklla.caryvan.menu.client.WagonScreen;
 import com.github.cerealklla.caryvan.network.ConfirmCartPickUpPayload;
+import com.github.cerealklla.caryvan.network.ConfirmSlotRemovalPayload;
 import com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmPayload;
+import com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmPayload;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 import com.github.cerealklla.caryvan.registration.ModMenus;
@@ -58,8 +60,11 @@ public class CaryvanModClient {
      */
     @SubscribeEvent
     static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").playToClient(OpenCartPickUpConfirmPayload.TYPE, OpenCartPickUpConfirmPayload.STREAM_CODEC,
+        var registrar = event.registrar("1");
+        registrar.playToClient(OpenCartPickUpConfirmPayload.TYPE, OpenCartPickUpConfirmPayload.STREAM_CODEC,
                 (payload, context) -> onOpenPickUpConfirm(payload));
+        registrar.playToClient(OpenSlotRemovalConfirmPayload.TYPE, OpenSlotRemovalConfirmPayload.STREAM_CODEC,
+                (payload, context) -> onOpenSlotRemovalConfirm(payload));
     }
 
     /**
@@ -77,6 +82,14 @@ public class CaryvanModClient {
                 Component.literal("Pick Up Cart"),
                 Component.literal("Pick up this cart?" + warning),
                 () -> send(new ConfirmCartPickUpPayload(payload.cartEntityId()))));
+    }
+
+    /** Mirrors {@link #onOpenPickUpConfirm}'s own doc exactly, for a single Companion/Summon Stone slot removal instead of the whole cart. */
+    private static void onOpenSlotRemovalConfirm(OpenSlotRemovalConfirmPayload payload) {
+        Minecraft.getInstance().setScreen(new ConfirmActionScreen(
+                Component.literal("Remove Companion"),
+                Component.literal("Remove this Companion/Summon Stone? This cart is Broken -- there's a 50% chance it's too wounded to retrieve."),
+                () -> send(new ConfirmSlotRemovalPayload(payload.cartEntityId(), payload.slotIndex()))));
     }
 
     // Hitch/unhitch no longer has its own keybind at all, 2026-10-25, explicit user correction --

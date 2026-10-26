@@ -130,6 +130,20 @@ public final class CarriageMenu extends AbstractContainerMenu {
         return super.clickMenuButton(player, id);
     }
 
+    /** Mirrors {@code WagonMenu#clicked}'s own doc exactly. */
+    @Override
+    public void clicked(final int slotIndex, final int buttonNum, final net.minecraft.world.inventory.ContainerInput containerInput, final Player player) {
+        if (slotIndex >= 0 && slotIndex < this.slots.size()
+                && this.slots.get(slotIndex) instanceof CompanionSlot slot
+                && slot.hasItem()
+                && this.container instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity cart
+                && cart.isBroken()) {
+            cart.requestCompanionSlotRemovalConfirm(player, slotIndex);
+            return;
+        }
+        super.clicked(slotIndex, buttonNum, containerInput, player);
+    }
+
     @Override
     public boolean stillValid(final Player player) {
         return this.container.stillValid(player);
