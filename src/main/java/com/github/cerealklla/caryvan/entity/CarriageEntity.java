@@ -74,6 +74,15 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
     private Entity leftSeatOccupant;
     private Entity rightSeatOccupant;
 
+    // Real spec, 2026-10-26 (Carriage redesign Phase 2, "cabin, doors, interior seating"): genuinely
+    // separate from both the front bench (leftSeatOccupant/rightSeatOccupant) and the existing
+    // "interior" Companion slots (now correctly understood as roof/running-board companions, per the
+    // user's own real reference photo -- those stay completely unchanged, see this class's own
+    // original doc). A reasonable starting count, explicitly flagged tunable -- the user's own words,
+    // "2-4 is a sensible placeholder."
+    private static final int INTERIOR_SEAT_COUNT = 4;
+    private final Entity[] interiorSeatOccupants = new Entity[INTERIOR_SEAT_COUNT];
+
     private static final double STEER_SPEED_FALLBACK = 0.2D;
     private static final double TEAM_FOLLOW_SPACING = 3.0D;
     private static final double TEAM_CATCH_UP_RATE = 0.6D;
@@ -193,7 +202,104 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         if (this.rightSeatOccupant != null && !this.hasPassenger(this.rightSeatOccupant)) {
             this.rightSeatOccupant = null;
         }
+        for (int i = 0; i < this.interiorSeatOccupants.length; i++) {
+            if (this.interiorSeatOccupants[i] != null && !this.hasPassenger(this.interiorSeatOccupants[i])) {
+                this.interiorSeatOccupants[i] = null;
+            }
+        }
     }
+
+    /**
+     * Generic, entity-agnostic interior-seat entry, triggered by right-clicking a door (see
+     * {@link #interact}) -- not a raw "sit anywhere" interact; the door is the entry point. Takes a
+     * plain {@link Entity}, not just {@link Player} -- real user spec: "Build the interior-seat
+     * mechanism generically... it needs to be usable by any entity in the future" (NPC passengers
+     * for future Myssions escort-shape quests), even though only players need to work end-to-end
+     * this round. Returns false if every seat is already taken, or this cart is Broken (no boarding
+     * a wrecked carriage through its own door).
+     */
+    public boolean enterInteriorSeat(final Entity entity) {
+        if (this.isBroken()) {
+            return false;
+        }
+        for (int i = 0; i < this.interiorSeatOccupants.length; i++) {
+            if (this.interiorSeatOccupants[i] == null) {
+                this.interiorSeatOccupants[i] = entity;
+                entity.startRiding(this, true, true);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Generic eject, mirroring {@link #enterInteriorSeat}'s own doc -- real user spec: "Shift-
+     * clicking, or re-interacting with their own occupied seat, auto-ejects them back out through
+     * that same door." Simplified this first pass to vanilla's own default dismount placement
+     * ({@code stopRiding}) rather than precisely teleporting back to whichever specific door the
+     * entity originally entered through -- doors are static/decorative this whole dispatch anyway
+     * (no open/close animation), so there's no door-specific point to walk back out of yet; flagged
+     * as a reasonable future refinement, not built here. Returns false if {@code entity} isn't
+     * actually occupying one of these seats.
+     */
+    public boolean ejectFromInteriorSeat(final Entity entity) {
+        for (int i = 0; i < this.interiorSeatOccupants.length; i++) {
+            if (this.interiorSeatOccupants[i] == entity) {
+                this.interiorSeatOccupants[i] = null;
+                entity.stopRiding();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isInInteriorSeat(final Entity entity) {
+        return interiorSeatIndexOf(entity) >= 0;
+    }
+
+    private int interiorSeatIndexOf(final Entity entity) {
+        for (int i = 0; i < this.interiorSeatOccupants.length; i++) {
+            if (this.interiorSeatOccupants[i] == entity) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // Entity-relative mirror of CarriageModel's own real door geometry -- that class is client-only
+    // (ModelPart etc.), can't be referenced from this common-sourceset entity class (see the root
+    // project's own "client-only type in a common class crashes the dedicated server" rule), so this
+    // is independently duplicated instead, same established pattern #SEAT_X_OFFSET/#FRONT_SEAT_Z
+    // already use for the front bench. Placeholder, needs live-test alignment against the real
+    // visual door position, like every other geometry constant in this file.
+    private static final double DOOR_Z_NEAR = 1.2D;
+    private static final double DOOR_Z_FAR = 2.0D;
+
+    /**
+     * Real door hit-test -- mirrors {@link #isLeftSideClick}'s own real-world-position technique
+     * (the PLAYER's actual position relative to the cart, yaw-rotated), not the click
+     * {@code location} vector itself: that's only ever offset relative to the entity's own position,
+     * never rotated into the cart's own local/yaw frame (confirmed against the real decompiled
+     * {@code ServerGamePacketListenerImpl#handleInteract}, which sends the client's own raw,
+     * world-axis-aligned relative offset) -- so a world-aligned {@code location.z} alone can't tell
+     * whether a click actually landed within the door's own local Z span once the cart is facing
+     * anything but a cardinal direction.
+     */
+    private boolean isNearDoor(final Player player) {
+        final double dx = player.getX() - this.getX();
+        final double dz = player.getZ() - this.getZ();
+        final double yawRad = Math.toRadians(this.getYRot());
+        final double forwardDot = dx * -Math.sin(yawRad) + dz * Math.cos(yawRad);
+        return forwardDot >= DOOR_Z_NEAR && forwardDot <= DOOR_Z_FAR;
+    }
+
+    // Entity-relative mirror of CarriageModel's own interior bench rows (interiorBench1Z/
+    // interiorBench2Z) -- same independent-duplication reasoning as #DOOR_Z_NEAR/FAR above.
+    // Placeholder, needs live-test alignment.
+    private static final double INTERIOR_SEAT_X_OFFSET = 0.34375D;
+    private static final double INTERIOR_SEAT_ROW_1_Z = -0.7D;
+    private static final double INTERIOR_SEAT_ROW_2_Z = -1.5D;
+    private static final double[] INTERIOR_SEAT_Z_BY_INDEX = {INTERIOR_SEAT_ROW_1_Z, INTERIOR_SEAT_ROW_1_Z, INTERIOR_SEAT_ROW_2_Z, INTERIOR_SEAT_ROW_2_Z};
 
     private boolean stoneClaims(final int slot, final Entity entity) {
         final ItemStack stone = this.getItem(slot);
@@ -456,6 +562,16 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
      */
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
+        // Real spec, 2026-10-26 (Carriage redesign Phase 2): re-interacting with the cart at all
+        // while already seated in an interior seat -- shift-click or plain click alike -- always
+        // ejects back out, checked first and unconditionally. Deliberately takes priority over
+        // everything below, including the owner's own Pick Up gesture just after this -- a seated
+        // passenger (owner or not) should always be able to get back out with a plain re-interact,
+        // not get redirected into a Pick Up confirm dialog instead.
+        if (this.isInInteriorSeat(player)) {
+            this.ejectFromInteriorSeat(player);
+            return InteractionResult.SUCCESS;
+        }
         // Pick Up / Repair, 2026-10-26 -- same owner-only sneak+right-click gesture as WagonEntity's
         // own #interact, see its doc for the full reasoning. Checked first; a non-owner's (or an
         // owner holding something else's) sneak+right-click is unaffected.
@@ -471,6 +587,16 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
                 }
                 return InteractionResult.SUCCESS;
             }
+        }
+        // Real spec, same day: right-clicking a door (not shift-clicking, not already seated) auto-
+        // seats the player in an available interior seat -- the door is the entry point, not a raw
+        // "sit anywhere" interact. Checked before the front-bench click zone below, since the door
+        // sits close enough to the bench that both real-world click spots need telling apart --
+        // #isNearDoor's own Z-range gate is what actually distinguishes them.
+        if (!this.isBroken() && !player.isShiftKeyDown() && !this.hasPassenger(player)
+                && this.isNearDoor(player) && location.y > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION
+                && this.enterInteriorSeat(player)) {
+            return InteractionResult.SUCCESS;
         }
         final boolean leftFree = this.leftSeatOccupant == null && this.companions[0] == null;
         final boolean rightFree = this.rightSeatOccupant == null && this.companions[1] == null;
@@ -531,6 +657,15 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
     /** Generalized version of {@code WagonEntity#getPassengerAttachmentPoint} for 6 seats -- the front pair still also checks {@link #leftSeatOccupant}/{@link #rightSeatOccupant} for a real player. */
     @Override
     protected Vec3 getPassengerAttachmentPoint(final Entity entity, final EntityDimensions dimensions, final float scale) {
+        final int interiorIndex = interiorSeatIndexOf(entity);
+        if (interiorIndex >= 0) {
+            final boolean leftSide = interiorIndex % 2 == 0;
+            final double xOffset = leftSide ? INTERIOR_SEAT_X_OFFSET : -INTERIOR_SEAT_X_OFFSET;
+            final double z = INTERIOR_SEAT_Z_BY_INDEX[interiorIndex];
+            final Vec3 local = new Vec3(xOffset, this.getBbHeight() * 0.85D, z).scale(scale);
+            final float yawRad = (float) Math.toRadians(this.getYRot());
+            return local.yRot(-yawRad);
+        }
         final int seatIndex;
         if (entity == this.leftSeatOccupant) {
             seatIndex = 0;
@@ -557,6 +692,9 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
      */
     @Override
     protected boolean canAddPassenger(final Entity passenger) {
+        if (isInInteriorSeat(passenger)) {
+            return true;
+        }
         if (passenger == this.companions[0]) {
             return this.leftSeatOccupant == null;
         }
