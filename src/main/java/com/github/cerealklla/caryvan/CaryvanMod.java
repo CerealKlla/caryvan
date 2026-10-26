@@ -3,6 +3,7 @@ package com.github.cerealklla.caryvan;
 import com.github.cerealklla.caryvan.interaction.CartMountDeathListener;
 import com.github.cerealklla.caryvan.interaction.CartMountDebugListener;
 import com.github.cerealklla.caryvan.interaction.CartMountInteractionListener;
+import com.github.cerealklla.caryvan.interaction.DamageableCartTargetingListener;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModAttachments;
 import com.github.cerealklla.caryvan.registration.ModEntities;
@@ -41,8 +42,13 @@ public class CaryvanMod {
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::registerPayloads);
+        modEventBus.addListener(this::registerAttributes);
 
         NeoForge.EVENT_BUS.addListener(this::onServerTick);
+        // Wagon/Carriage health system, 2026-10-26: makes hostile mobs actually choose to attack an
+        // idle wagon/carriage, the user's own explicit "non-negotiable" requirement -- see that
+        // class's own doc.
+        NeoForge.EVENT_BUS.register(new DamageableCartTargetingListener());
         // Real user request, 2026-10-25: "I think once you disable being able to ride the horses
         // individually in a team-style wagon we won't have that possibility of a problem anymore"
         // (a player manually riding a team mount away, then dismounting, could strand it beyond
@@ -79,6 +85,18 @@ public class CaryvanMod {
 
     private void commonSetup(net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent event) {
         LOGGER.info("Caryvan common setup");
+    }
+
+    /**
+     * Wagon/Carriage health system, 2026-10-26 -- both are now real {@code LivingEntity} subclasses
+     * and need a registered {@code AttributeSupplier} or they crash the instant one is constructed
+     * (confirmed via a real crash log once already this session, for an identical gap in
+     * Settlemynts' {@code GuardKitStandEntity}). Hand Cart/Animal Cart are untouched, still plain
+     * {@code VehicleEntity}s -- no attribute supplier needed for those.
+     */
+    private void registerAttributes(net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent event) {
+        event.put(ModEntities.WAGON.get(), com.github.cerealklla.caryvan.entity.WagonEntity.createAttributes().build());
+        event.put(ModEntities.CARRIAGE.get(), com.github.cerealklla.caryvan.entity.CarriageEntity.createAttributes().build());
     }
 
     private void registerPayloads(RegisterPayloadHandlersEvent event) {

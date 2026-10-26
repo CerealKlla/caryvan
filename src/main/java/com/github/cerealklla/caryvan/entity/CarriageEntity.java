@@ -48,7 +48,10 @@ import net.minecraft.world.phys.Vec3;
  * <p>Body is "a little longer and wider than the Wagon to fit 4 inside comfortably" (explicit user
  * spec) -- see {@code CarriageModel}'s own doc for the real scale factors.
  */
-public final class CarriageEntity extends AbstractDrawnInventoryEntity implements Leashable {
+public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity implements Leashable, com.github.cerealklla.nuclyus.statbar.StatBarOwner {
+
+    /** Placeholder, flagged for live-test tuning -- see the approved plan's §2. */
+    private static final float BASE_MAX_HEALTH = 150.0F;
 
     private static final int LEAD_SLOT = 0;
     private static final int TEAM_SLOT = 1;
@@ -79,6 +82,16 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
         super(entityType, level, CarriageMenu.CONTAINER_SIZE);
     }
 
+    /** Registered in {@code CaryvanMod#registerAttributes} -- see {@code WagonEntity#createAttributes}'s own doc. */
+    public static net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder createAttributes() {
+        return AbstractDamageableDrawnEntity.createAttributes(BASE_MAX_HEALTH);
+    }
+
+    @Override
+    protected float getBaseMaxHealth() {
+        return BASE_MAX_HEALTH;
+    }
+
     @Override
     protected double getSpacing() {
         return SPACING_BLOCKS;
@@ -92,6 +105,52 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
     @Override
     public Item getBrokenCartItem() {
         return ModItems.BROKEN_CARRIAGE.get();
+    }
+
+    /** Mirrors {@code WagonEntity#onEnterBrokenState}'s own doc -- de-summons both mount Summoning Stones, leaves all 6 Companions defending. */
+    @Override
+    protected void onEnterBrokenState(final ServerLevel level) {
+        if (!LyfeSummoningBridge.isLoaded()) {
+            return;
+        }
+        final ItemStack leadStone = this.getItem(LEAD_SLOT);
+        if (!leadStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, leadStone);
+        }
+        final ItemStack teamStone = this.getItem(TEAM_SLOT);
+        if (!teamStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, teamStone);
+        }
+    }
+
+    /** Mirrors {@code WagonEntity#onPickUp}'s own doc -- rolls 50%-destroy per live Companion (all 6 seats) when picking up a Broken carriage. */
+    @Override
+    protected void onPickUp(final ServerLevel level, final boolean broken) {
+        if (!LyfeSummoningBridge.isLoaded()) {
+            return;
+        }
+        final ItemStack leadStone = this.getItem(LEAD_SLOT);
+        if (!leadStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, leadStone);
+        }
+        final ItemStack teamStone = this.getItem(TEAM_SLOT);
+        if (!teamStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, teamStone);
+        }
+        for (int i = 0; i < COMPANION_SLOTS.length; i++) {
+            final ItemStack stack = this.getItem(COMPANION_SLOTS[i]);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            if (broken && level.getRandom().nextFloat() < 0.5F) {
+                if (this.companions[i] != null) {
+                    this.companions[i].discard();
+                }
+                this.setItem(COMPANION_SLOTS[i], ItemStack.EMPTY);
+            } else {
+                LyfeSummoningBridge.despawnCompanionCleanly(level, stack);
+            }
+        }
     }
 
     @Override
@@ -382,6 +441,20 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
      */
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
+        // Pick Up / Repair, 2026-10-26 -- same owner-only sneak+right-click gesture as WagonEntity's
+        // own #interact, see its doc for the full reasoning. Checked first; a non-owner's (or an
+        // owner holding something else's) sneak+right-click is unaffected.
+        if (player.isShiftKeyDown() && this.isOwner(player)) {
+            final ItemStack held = player.getItemInHand(hand);
+            if (held.isEmpty()) {
+                this.handlePickUpAttempt(player);
+                return InteractionResult.SUCCESS;
+            }
+            if (held.getItem() == ModItems.wheelsFor(this.getWoodType())) {
+                this.handleRepairAttempt(player, held);
+                return InteractionResult.SUCCESS;
+            }
+        }
         final boolean leftFree = this.leftSeatOccupant == null && this.companions[0] == null;
         final boolean rightFree = this.rightSeatOccupant == null && this.companions[1] == null;
         if (!player.isShiftKeyDown() && (leftFree || rightFree)

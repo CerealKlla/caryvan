@@ -78,7 +78,10 @@ import net.minecraft.world.phys.Vec3;
  *   driver (design-document.md §8 points 4/6/7/8) are all explicitly out of scope this pass.</li>
  * </ul>
  */
-public final class WagonEntity extends AbstractDrawnInventoryEntity implements Leashable {
+public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity implements Leashable, com.github.cerealklla.nuclyus.statbar.StatBarOwner {
+
+    /** Placeholder, flagged for live-test tuning -- see the approved plan's §2. */
+    private static final float BASE_MAX_HEALTH = 100.0F;
 
     private static final int LEAD_SLOT = 0;
     private static final int TEAM_SLOT = 1;
@@ -151,6 +154,16 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
         super(entityType, level, WagonMenu.CONTAINER_SIZE);
     }
 
+    /** Registered in {@code CaryvanMod#registerAttributes} -- mirrors {@code GuardKitStandEntity}'s own real {@code ArmorStand.createAttributes()} precedent for a {@code LivingEntity} subclass. */
+    public static net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder createAttributes() {
+        return AbstractDamageableDrawnEntity.createAttributes(BASE_MAX_HEALTH);
+    }
+
+    @Override
+    protected float getBaseMaxHealth() {
+        return BASE_MAX_HEALTH;
+    }
+
     @Override
     protected double getSpacing() {
         return SPACING_BLOCKS;
@@ -164,6 +177,65 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
     @Override
     public Item getBrokenCartItem() {
         return ModItems.BROKEN_WAGON.get();
+    }
+
+    /**
+     * De-summons both bound mount Summoning Stones the instant this wagon's HP hits 0 -- real user
+     * spec: "de-summon any Summon Stones. Any active Companions will still defend the wagon."
+     * Reuses {@link LyfeSummoningBridge#despawnMountCleanly} (the exact clean-recapture facade built
+     * earlier this session for "recall, don't let it look like it died") rather than discarding the
+     * live mount entities directly -- the stack itself recaptures whatever the mount currently is.
+     */
+    @Override
+    protected void onEnterBrokenState(final ServerLevel level) {
+        if (!LyfeSummoningBridge.isLoaded()) {
+            return;
+        }
+        final ItemStack leadStone = this.getItem(LEAD_SLOT);
+        if (!leadStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, leadStone);
+        }
+        final ItemStack teamStone = this.getItem(TEAM_SLOT);
+        if (!teamStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, teamStone);
+        }
+    }
+
+    /**
+     * Real user spec: Pick Up on a Broken wagon rolls 50%-destroy per Companion (mount Summoning
+     * Stones are already cleanly de-summoned by {@link #onEnterBrokenState}, nothing left to roll
+     * against). Picking up a healthy wagon just cleanly recalls everything, same as always.
+     */
+    @Override
+    protected void onPickUp(final ServerLevel level, final boolean broken) {
+        if (!LyfeSummoningBridge.isLoaded()) {
+            return;
+        }
+        final ItemStack leadStone = this.getItem(LEAD_SLOT);
+        if (!leadStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, leadStone);
+        }
+        final ItemStack teamStone = this.getItem(TEAM_SLOT);
+        if (!teamStone.isEmpty()) {
+            LyfeSummoningBridge.despawnMountCleanly(level, teamStone);
+        }
+        rollOrDespawnCompanion(level, COMPANION_LEFT_SLOT, this.companionLeft, broken);
+        rollOrDespawnCompanion(level, COMPANION_RIGHT_SLOT, this.companionRight, broken);
+    }
+
+    private void rollOrDespawnCompanion(final ServerLevel level, final int slot, final Entity liveCompanion, final boolean broken) {
+        final ItemStack stack = this.getItem(slot);
+        if (stack.isEmpty()) {
+            return;
+        }
+        if (broken && level.getRandom().nextFloat() < 0.5F) {
+            if (liveCompanion != null) {
+                liveCompanion.discard();
+            }
+            this.setItem(slot, ItemStack.EMPTY);
+        } else {
+            LyfeSummoningBridge.despawnCompanionCleanly(level, stack);
+        }
     }
 
     @Override
@@ -610,6 +682,22 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
 
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
+        // Pick Up / Repair, 2026-10-26 (health system work) -- owner-only, sneak+right-click.
+        // Empty hand -> Pick Up (arm/confirm, see #handlePickUpAttempt's own doc); holding a Wheels
+        // item matching this wagon's own wood species -> Repair. Checked first, before the existing
+        // sneak-falls-through-to-cargo behavior below -- a non-owner's sneak+right-click is
+        // unaffected (still falls through to cargo, unchanged).
+        if (player.isShiftKeyDown() && this.isOwner(player)) {
+            final ItemStack held = player.getItemInHand(hand);
+            if (held.isEmpty()) {
+                this.handlePickUpAttempt(player);
+                return InteractionResult.SUCCESS;
+            }
+            if (held.getItem() == ModItems.wheelsFor(this.getWoodType())) {
+                this.handleRepairAttempt(player, held);
+                return InteractionResult.SUCCESS;
+            }
+        }
         // Real bug, 2026-10-25: sneak+right-click can never actually mount anything, full stop --
         // vanilla's own generic Player#rideTick() checks "is shift currently held" EVERY tick while
         // riding and immediately calls stopRiding() the instant it's true (confirmed via the real
@@ -851,6 +939,14 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
         this.leadMount.move(MoverType.SELF, direction.scale(speed));
     }
 
+    // NOTE (2026-10-26, scope flag): the approved plan's spec -- "Only if all companions are
+    // killed would someone be able to gain access to the inventory of the wagon" once Broken -- is
+    // NOT enforced here. A gate on createMenu() was tried and reverted: it would block the ENTIRE
+    // menu, including the very CompanionSlot a player needs to reach to attempt removing a
+    // Companion in the first place (the 50%-destroy-or-keep-defending roll, see CompanionSlot's own
+    // doc) -- there would be no way to ever progress toward "all companions dead" at all. A correct
+    // fix needs cargo-slot-specific gating (e.g. a custom Slot#mayPickup override per cargo slot, or
+    // overriding WagonMenu#clicked), not attempted this pass -- flagged for follow-up.
     @Override
     public AbstractContainerMenu createMenu(final int containerId, final Inventory inventory, final Player player) {
         this.unpackChestVehicleLootTable(player);

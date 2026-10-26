@@ -74,7 +74,10 @@ public final class WagonItem extends Item {
             return InteractionResult.FAIL;
         }
 
-        ((com.github.cerealklla.caryvan.entity.AbstractDrawnEntity) cart).setWoodType(this.woodType);
+        final var damageable = (com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) cart;
+        damageable.setWoodType(this.woodType);
+        // Owner capture, 2026-10-26 (health system work) -- Pick Up/Repair are owner-only actions.
+        damageable.setOwnerId(player.getUUID());
         level.addFreshEntity(cart);
         level.playSound(null, cart.getX(), cart.getY(), cart.getZ(), SoundEvents.WOOD_PLACE, SoundSource.BLOCKS, 0.75F, 0.8F);
         if (!player.getAbilities().instabuild) {

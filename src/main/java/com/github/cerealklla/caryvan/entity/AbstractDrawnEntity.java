@@ -61,7 +61,7 @@ import net.minecraft.world.phys.Vec3;
  *   design document's own phased build order.</li>
  * </ul>
  */
-public abstract class AbstractDrawnEntity extends VehicleEntity {
+public abstract class AbstractDrawnEntity extends VehicleEntity implements com.github.cerealklla.caryvan.util.PulledCart {
 
     // Real user report, 2026-10-25: "the connection... seems to snap when further than 1 block
     // apart... will be an issue while moving quickly." Raised from 2.0, and -- the actual bug --

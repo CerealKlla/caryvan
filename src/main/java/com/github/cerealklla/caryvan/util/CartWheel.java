@@ -1,21 +1,26 @@
 package com.github.cerealklla.caryvan.util;
 
-import com.github.cerealklla.caryvan.entity.AbstractDrawnEntity;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * One wheel's rotation state for a {@link AbstractDrawnEntity} -- adapted from NiftyCarts
+ * One wheel's rotation state for a cart entity -- adapted from NiftyCarts
  * (github.com/jmb05/nifty-carts, MIT licensed; see this repo's own CLAUDE.md for the full
  * attribution/licensing writeup). Tracks how far the cart has actually travelled since the last
  * tick (not just how fast it's nominally moving) so the wheel visually rotates the right amount
  * regardless of pull speed, and kicks up a block-break-style particle matching whatever the wheel
  * is currently rolling over.
+ *
+ * <p>Widened from {@code AbstractDrawnEntity} to plain {@link Entity} 2026-10-26 (Wagon/Carriage
+ * health system work) -- every real usage here (`getX`/`getY`/`getYRot`/`level()`) is already
+ * plain {@code Entity} API, so this one change lets the same class serve both the original
+ * {@code VehicleEntity}-based cart hierarchy (Hand Cart/Animal Cart) and the new
+ * {@code LivingEntity}-based one (Wagon/Carriage) with no duplication.
  */
 public final class CartWheel {
     private float rotation;
@@ -27,9 +32,13 @@ public final class CartWheel {
     private double posZ;
     private double prevPosX;
     private double prevPosZ;
-    private final AbstractDrawnEntity cart;
+    private final Entity cart;
+    // Wagon/Carriage health system, 2026-10-26: whether this wheel is currently in the "broken"
+    // visual/functional state (see AbstractDamageableDrawnEntity's own doc for the damage ->
+    // wheel-break formula). Always false for Hand Cart/Animal Cart, which never set it.
+    private boolean broken;
 
-    public CartWheel(final AbstractDrawnEntity cart, final float offsetX, final float offsetZ, final float circumference) {
+    public CartWheel(final Entity cart, final float offsetX, final float offsetZ, final float circumference) {
         this.cart = cart;
         this.offsetX = offsetX;
         this.offsetZ = offsetZ;
@@ -38,8 +47,16 @@ public final class CartWheel {
         this.posZ = this.prevPosZ = cart.getZ();
     }
 
-    public CartWheel(final AbstractDrawnEntity cart, final float offsetX) {
+    public CartWheel(final Entity cart, final float offsetX) {
         this(cart, offsetX, 0.0F, (float) (10 * Math.PI * 2 / 16));
+    }
+
+    public boolean isBroken() {
+        return this.broken;
+    }
+
+    public void setBroken(final boolean broken) {
+        this.broken = broken;
     }
 
     public void tick() {
