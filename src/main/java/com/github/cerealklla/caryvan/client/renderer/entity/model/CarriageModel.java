@@ -127,10 +127,15 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         this.rightWheelBackBroken = parts.getChild("rightWheelBackBroken");
         this.fallenWheelFront = parts.getChild("fallenWheelFront");
         this.fallenWheelBack = parts.getChild("fallenWheelBack");
-        this.wallDoorLeft = parts.getChild("wallDoorLeft");
-        this.wallDoorLeftBroken = parts.getChild("wallDoorLeftBroken");
-        this.wallDoorRight = parts.getChild("wallDoorRight");
-        this.wallDoorRightBroken = parts.getChild("wallDoorRightBroken");
+        // The door parts are added to "body" (see #createLayer), which is itself a child of "root" --
+        // one level deeper than the wheels above, which are direct children of "root" instead. Real
+        // crash fixed 2026-10-26: NoSuchElementException from calling parts.getChild("wallDoorLeft")
+        // directly, one level too shallow for where this part actually lives.
+        final ModelPart body = parts.getChild("body");
+        this.wallDoorLeft = body.getChild("wallDoorLeft");
+        this.wallDoorLeftBroken = body.getChild("wallDoorLeftBroken");
+        this.wallDoorRight = body.getChild("wallDoorRight");
+        this.wallDoorRightBroken = body.getChild("wallDoorRightBroken");
     }
 
     /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly. */
