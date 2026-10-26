@@ -554,11 +554,34 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
      * once within a real {@link #TEAM_SETTLE_DISTANCE}, instead of chasing an exact, noise-sensitive
      * point every tick regardless of how close the horse already is.
      */
+    /**
+     * Real second fix, 2026-10-26: "team horses spinning wildly" got WORSE, not better, right after
+     * the settle-distance fix above landed. Root cause -- that fix correctly stopped recomputing
+     * heading from a numerically-unstable near-zero vector once settled, but it did so by not
+     * calling {@code setYRot}/{@code setYHeadRot} AT ALL once within {@link #TEAM_SETTLE_DISTANCE},
+     * ceding rotation entirely to vanilla's own real per-tick leash physics
+     * ({@code Leashable#tickLeash}, which genuinely runs for these horses independent of any AI goal
+     * -- confirmed via its own real decompiled source, including actual elastic/quad-leash "wrench"
+     * torque corrections under tension). Previously, this method's own (buggy but continuously
+     * dominant) heading write stomped over whatever vanilla's leash physics was doing to rotation
+     * every single tick, so that system's own oscillatory tendency never got a chance to surface;
+     * once this method started doing nothing some ticks, vanilla's own uncontested correction could.
+     * Real fix: decouple "which way to face" from "how far to step toward the formation slot" --
+     * heading is now always the lead's own current yaw (a stable value that never depends on this
+     * horse's own exact position, so it's never subject to the old near-zero-vector instability),
+     * asserted unconditionally every tick regardless of distance; only the MOVEMENT step (not
+     * rotation) is gated behind {@link #TEAM_SETTLE_DISTANCE}, since not re-stepping once already in
+     * place is correct, but no longer leaves rotation unopposed.
+     */
     private void syncOneTeamFollow(final Entity team, final boolean left) {
         if (team == null || !team.isAlive() || this.leadMount == null || !this.leadMount.isAlive()) {
             return;
         }
         final float leadYawRad = (float) Math.toRadians(this.leadMount.getYRot());
+        final float headingDegrees = this.leadMount.getYRot();
+        team.setYRot(headingDegrees);
+        team.setYHeadRot(headingDegrees);
+
         final double bx = -Mth.sin(leadYawRad);
         final double bz = Mth.cos(leadYawRad);
         final double rx = Mth.cos(leadYawRad);
@@ -574,9 +597,6 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
             return;
         }
         final Vec3 direction = horizontal.normalize();
-        final float heading = (float) Math.toDegrees(-Mth.atan2(direction.x, direction.z));
-        team.setYRot(heading);
-        team.setYHeadRot(heading);
         final double step = Math.min(dist, TEAM_CATCH_UP_RATE);
         team.move(MoverType.SELF, direction.scale(step));
     }
@@ -812,7 +832,16 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
     // spacing, like every one of WagonEntity's own seat constants started out as before live-test
     // correction.
     private static final double SEAT_X_OFFSET = 0.34375D;
-    private static final double FRONT_SEAT_Z = 1.75D;
+    // Real fix, 2026-10-26: live screenshot showed the driver clipped into the front wall instead of
+    // sitting on the real frontBenchSeat. Root cause -- this constant was left at Wagon's own proven
+    // value (1.75) when the cabin was first built and never re-derived for Carriage's own, later-
+    // moved bench. The real conversion, confirmed against Wagon's own already-correct value: entity
+    // seat Z = -(the model's own frontBenchSeat box center Z, in blocks) -- Wagon's benchSeat center
+    // is -28 raw units (-1.75 blocks), and its own entity constant is exactly +1.75, a clean negation,
+    // not a fudge factor. CarriageModel's own frontBenchSeat (after the reference-photo rebuild) spans
+    // raw Z [-48,-40] (pivot frontBenchZ=-40, box depth 8), center -44 raw = -2.75 blocks -> negated,
+    // +2.75.
+    private static final double FRONT_SEAT_Z = 2.75D;
     private static final double INTERIOR_SEAT_1_Z = 0.0D;
     private static final double INTERIOR_SEAT_2_Z = -1.75D;
     private static final double[] SEAT_Z_BY_INDEX = {FRONT_SEAT_Z, FRONT_SEAT_Z, INTERIOR_SEAT_1_Z, INTERIOR_SEAT_1_Z, INTERIOR_SEAT_2_Z, INTERIOR_SEAT_2_Z};

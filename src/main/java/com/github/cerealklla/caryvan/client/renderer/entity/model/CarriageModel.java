@@ -93,9 +93,14 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     // Real Y convention, rebuilt 2026-10-26 -- see this class's own top-level doc. FLOOR_Y=0 is
     // physically lowest; each constant below climbs higher (more negative) in turn.
     private static final float FLOOR_Y = 0.0F;
-    private static final float SKIRT_HEIGHT = 5.0F;
-    private static final float WINDOW_HEIGHT = 2.0F;
-    private static final float HEADER_HEIGHT = 2.0F;
+    // Real fix, 2026-10-26: these three were never scaled like every other dimension in this file,
+    // leaving the whole cabin only 9 units (0.5625 blocks) tall -- roughly the same as the wheel
+    // radius, confirmed directly against a live screenshot ("the box is 6 inches tall, and is at its
+    // tallest the same height as the wheels"). A real enclosed cabin needs to actually fit a seated
+    // player and read as several times taller than the wheels, matching the reference photo.
+    private static final float SKIRT_HEIGHT = 9.0F;
+    private static final float WINDOW_HEIGHT = 10.0F;
+    private static final float HEADER_HEIGHT = 5.0F;
     private static final float BELT_Y = FLOOR_Y - SKIRT_HEIGHT;
     private static final float WINDOW_TOP_Y = BELT_Y - WINDOW_HEIGHT;
     private static final float WALL_TOP_Y = WINDOW_TOP_Y - HEADER_HEIGHT;
@@ -292,6 +297,15 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         final float doorBackZ = doorFrontZ + doorLength;
         final EasyMeshBuilder wallDoorLeft = wallSegment("wallDoorLeft", -sideX, WALL_TOP_Y, WALL_HEIGHT, doorFrontZ, doorBackZ);
         final EasyMeshBuilder wallDoorRight = wallSegment("wallDoorRight", sideX, WALL_TOP_Y, WALL_HEIGHT, doorFrontZ, doorBackZ);
+        // Real fix, 2026-10-26: live-test report, "I have no idea where the actual door is (it
+        // doesn't look like a door)" -- wallDoorLeft/Right were built from the exact same plain
+        // wallSegment() shape every other wall/window panel uses, with nothing marking them as
+        // interactive. Adds a real protruding frame outline + a handle knob directly onto these same
+        // two builders (more boxes on the same part, same "one builder, many boxes" pattern this
+        // file already uses elsewhere) -- a genuine geometry change, not a texture trick, consistent
+        // with how a broken door/wheel already reads as damaged through shape alone in this model.
+        addDoorDetails(wallDoorLeft, doorLength, WALL_HEIGHT);
+        addDoorDetails(wallDoorRight, doorLength, WALL_HEIGHT);
 
         // Real "hang off its hinges" damaged-door geometry, Carriage redesign Phase 3 -- the hinge is
         // the door's own BACK edge (doorBackZ, away from the driver's bench); the panel swings open
@@ -462,6 +476,29 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         wall.setRotationPoint(x, yTopEdge, zCenter);
         wall.yRot = x < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
         return wall;
+    }
+
+    /**
+     * Real fix, 2026-10-26 -- see this door's own call site doc. Adds a raised frame outline (4 thin
+     * strips around the panel's own perimeter, protruding symmetrically past the plain panel's own
+     * {@code [-0.5, 0.5]} Z thickness so it reads from either side) plus a handle knob near the
+     * panel's own FRONT edge (local X near {@code -length/2}, i.e. {@code doorFrontZ} -- opposite
+     * {@link #brokenDoorPanel}'s own hinge at {@code doorBackZ}, the real opposite-the-hinge handle
+     * placement a real door has) -- all added directly onto the already-built {@code door} part, in
+     * the SAME local "along local X, pre-yRot-alignment" space {@link #wallSegment} itself builds in.
+     */
+    private static void addDoorDetails(final EasyMeshBuilder door, final float length, final float height) {
+        final float frameThickness = 0.8F;
+        final float frameDepth = 1.4F;
+        final float frameZ = -frameDepth / 2.0F;
+        door.addBox(-length / 2.0F, 0.0F, frameZ, length, frameThickness, frameDepth);
+        door.addBox(-length / 2.0F, height - frameThickness, frameZ, length, frameThickness, frameDepth);
+        door.addBox(-length / 2.0F, 0.0F, frameZ, frameThickness, height, frameDepth);
+        door.addBox(length / 2.0F - frameThickness, 0.0F, frameZ, frameThickness, height, frameDepth);
+
+        final float handleSize = 0.8F;
+        final float handleX = -length / 2.0F + frameThickness + 1.0F;
+        door.addBox(handleX, height * 0.4F, -1.2F, handleSize, handleSize, handleSize);
     }
 
     /**
