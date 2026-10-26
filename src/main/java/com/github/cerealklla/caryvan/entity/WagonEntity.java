@@ -632,19 +632,28 @@ public final class WagonEntity extends AbstractDrawnInventoryEntity implements L
         // keeps it -- see #leftFree/#rightFree below and #canAddPassenger's own doc for the other
         // half of this.
         //
-        // Temporary diagnostic, 2026-10-26: the ORIGINAL mount-blocking report ("I can't right click
-        // or shift right click... it only opens inventory no matter where I click") turned out to
-        // involve no companions at all, so the fix above was never the real cause -- logging moved
-        // outside the gate so a failing gate condition is visible too, not just a successful one.
+        // Real root cause, 2026-10-26, found via the diagnostic logging added right above this fix:
+        // "clickHeightFraction=-46.7 (needs > 0.6)" -- not a small miscalibration, a ~70-block-off
+        // garbage value. Confirmed against the real decompiled source
+        // ({@code MultiPlayerGameMode#interact}): the CLIENT already subtracts the entity's own
+        // position before ever sending this packet --
+        // {@code Vec3 location = hitResult.getLocation().subtract(entity.getX(), entity.getY(),
+        // entity.getZ());} -- so by the time {@code interact(Player, InteractionHand, Vec3 location)}
+        // runs on the server, {@code location} is already LOCAL (relative to this entity's own
+        // origin, typically a small number), not a world-absolute coordinate. Subtracting
+        // {@code this.getY()} from it a second time was always wrong -- it just happened to go
+        // unnoticed through this session's own dev-world testing (apparently a low enough Y there for
+        // the garbage result to occasionally still clear the threshold by chance) until tested here
+        // on Production's real terrain (surface Y ~70+), where it could never pass at all. Fixed by
+        // using {@code location.y} directly -- it's already the height above this entity's own base.
         final boolean shiftHeld = player.isShiftKeyDown();
         final boolean hasRoom = this.getPassengers().size() < 2;
-        final double clickHeightFraction = this.getBbHeight() <= 0 ? -1 : (location.y - this.getY()) / this.getBbHeight();
         CaryvanMod.LOGGER.info(
-                "[cart-mount-debug] interact() gate check by {} -- shiftHeld={}, passengers={}, hasRoom={}, clickHeightFraction={} (needs > {}), bbHeight={}",
-                player.getName().getString(), shiftHeld, this.getPassengers().size(), hasRoom, clickHeightFraction,
-                BENCH_CLICK_HEIGHT_FRACTION, this.getBbHeight());
+                "[cart-mount-debug] interact() gate check by {} -- shiftHeld={}, passengers={}, hasRoom={}, locationY={} (needs > {}), bbHeight={}",
+                player.getName().getString(), shiftHeld, this.getPassengers().size(), hasRoom, location.y,
+                this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION, this.getBbHeight());
         if (!shiftHeld && hasRoom
-                && location.y - this.getY() > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
+                && location.y > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
             final boolean alreadyRiding = this.hasPassenger(player);
             final boolean wantsLeft = this.isLeftSideClick(player);
             final boolean leftFree = this.leftSeatOccupant == null && this.companionLeft == null;

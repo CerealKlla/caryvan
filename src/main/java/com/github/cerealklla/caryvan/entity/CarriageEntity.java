@@ -369,13 +369,18 @@ public final class CarriageEntity extends AbstractDrawnInventoryEntity implement
      * nothing to do with the front bench at all -- a plain {@code getPassengers().size() < 2} gate
      * would incorrectly refuse a player even with both front seats empty, the instant 2+ interior
      * seats were filled. The gate here checks front-seat availability directly instead.
+     *
+     * <p>{@code location.y} is used directly, not {@code location.y - this.getY()} -- see
+     * {@code WagonEntity#interact}'s own doc for the real root cause (the client already sends this
+     * relative to the entity's own position; subtracting it again produced a ~70-block-off garbage
+     * value that could never clear the threshold on Production's real terrain).
      */
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
         final boolean leftFree = this.leftSeatOccupant == null && this.companions[0] == null;
         final boolean rightFree = this.rightSeatOccupant == null && this.companions[1] == null;
         if (!player.isShiftKeyDown() && (leftFree || rightFree)
-                && location.y - this.getY() > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
+                && location.y > this.getBbHeight() * BENCH_CLICK_HEIGHT_FRACTION) {
             final boolean alreadyRiding = this.hasPassenger(player);
             final boolean wantsLeft = this.isLeftSideClick(player);
             if (alreadyRiding) {
