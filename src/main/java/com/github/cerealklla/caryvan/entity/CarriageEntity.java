@@ -38,17 +38,25 @@ import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Carriage (design-document.md §8's diagram, built 2026-10-26) -- a bigger Wagon: same daisy-chained
- * lead/team Summon Stone mount pair ({@link WagonEntity}'s own doc covers that mechanic in full, not
- * repeated here), but 6 real Companion seats instead of 2 -- real user spec: "Carriage should allow
- * Driver and Passenger up front, and have 4 internal seats for non-combatants." The front two
- * ({@link #FRONT_LEFT_SLOT}/{@link #FRONT_RIGHT_SLOT}) are the exact same dual-mode seat
- * {@code WagonEntity} already has (a player can click to sit directly, driver=left steers; a bound
- * Allay in a Bottle placed in the matching slot rides there too) -- the 4 interior ones
- * ({@link #INTERIOR_SLOTS}) are Companion-slot-only, not directly player-clickable, matching the "for
- * non-combatants" framing (a companion, not a second driver). {@link #companions}' index 0/1 are the
- * front pair, 2-5 the interior ones, each with its own fixed left/right + front-to-back seat
- * position; see {@link #seatLocalOffset} for the actual per-seat coordinates.
+ * Carriage (design-document.md §8's diagram, built 2026-10-26) -- a bigger Wagon originally, now a
+ * real enclosed-cabin redesign (Phase 1-4, same day): a real 3-horse "triangle"/"spike" team (lead
+ * alone out front, 2 team horses abreast behind it -- see {@link #leadSpawnPosition()}/{@link
+ * #teamSpawnPosition(boolean)}), a real enclosed cabin with 2 independently-repairable doors (see
+ * this class's own Door-repair section, {@code CarriageModel}'s own doc), and genuinely separate
+ * interior passenger seating reached only through those doors (see {@link #enterInteriorSeat}).
+ *
+ * <p>Still has 6 real "roof/running-board" Companion seats too -- real user spec: "Carriage should
+ * allow Driver and Passenger up front, and have 4 internal seats for non-combatants," later corrected
+ * (Phase 2 dispatch): these 6 are NOT the cabin's real interior seats at all, they're companions
+ * riding on the roof or standing on the side running boards (visible in the user's own reference
+ * photo) -- unchanged by the redesign. The front two ({@link #FRONT_LEFT_SLOT}/
+ * {@link #FRONT_RIGHT_SLOT}) are the exact same dual-mode seat {@code WagonEntity} already has (a
+ * player can click to sit directly, driver=left steers; a bound Allay in a Bottle placed in the
+ * matching slot rides there too) -- the 4 others ({@link #INTERIOR_SLOTS}, a slightly stale name
+ * now that real interior seating exists separately -- kept to avoid an unnecessary rename churn) are
+ * Companion-slot-only, not directly player-clickable. {@link #companions}' index 0/1 are the front
+ * pair, 2-5 the rest, each with its own fixed left/right + front-to-back position; see
+ * {@link #seatLocalOffset} for the actual per-seat coordinates.
  *
  * <p>Body is "a little longer and wider than the Wagon to fit 4 inside comfortably" (explicit user
  * spec) -- see {@code CarriageModel}'s own doc for the real scale factors.
@@ -58,21 +66,38 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
     /** Placeholder, flagged for live-test tuning -- see the approved plan's §2. */
     private static final float BASE_MAX_HEALTH = 150.0F;
 
+    // Carriage redesign Phase 4, 2026-10-26: triangle/"spike" team formation -- real user spec, "1
+    // lead horse alone out front, 2 horses abreast behind it (closer to the carriage, forming the
+    // base of the triangle)." A genuine 3rd mount slot, not a 2-slot system -- every slot after this
+    // one shifts by 1 from the old layout (FRONT_LEFT_SLOT was 2, now 3; see CarriageMenu's own
+    // layout, which mirrors this exactly). See #leadSpawnPosition/#teamSpawnPosition for the real
+    // triangle positional math this slot split feeds.
     private static final int LEAD_SLOT = 0;
-    private static final int TEAM_SLOT = 1;
-    private static final int FRONT_LEFT_SLOT = 2;
-    private static final int FRONT_RIGHT_SLOT = 3;
-    private static final int[] INTERIOR_SLOTS = {4, 5, 6, 7};
+    private static final int TEAM_LEFT_SLOT = 1;
+    private static final int TEAM_RIGHT_SLOT = 2;
+    private static final int FRONT_LEFT_SLOT = 3;
+    private static final int FRONT_RIGHT_SLOT = 4;
+    private static final int[] INTERIOR_SLOTS = {5, 6, 7, 8};
     // All 6 Companion-type slots, front pair first -- same order #companions/#seatLocalOffset use.
-    private static final int[] COMPANION_SLOTS = {FRONT_LEFT_SLOT, FRONT_RIGHT_SLOT, 4, 5, 6, 7};
+    private static final int[] COMPANION_SLOTS = {FRONT_LEFT_SLOT, FRONT_RIGHT_SLOT, 5, 6, 7, 8};
+    private static final int[] MOUNT_SLOTS = {LEAD_SLOT, TEAM_LEFT_SLOT, TEAM_RIGHT_SLOT};
 
     // Same reasoning as WagonEntity#SPACING_BLOCKS -- a bigger body needs more breathing room from
     // the lead mount, scaled up proportionally with the body's own real length increase (see
-    // CarriageModel's LENGTH_SCALE). Untested placeholder, like Wagon's own first pass was.
+    // CarriageModel's LENGTH_SCALE). Untested placeholder, like Wagon's own first pass was. Now the
+    // TEAM row's own distance specifically (the base of the triangle, closer to the carriage) --
+    // #leadSpawnPosition adds #LEAD_EXTRA_DISTANCE on top of this for the lead's own further-out tip.
     private static final double SPACING_BLOCKS = 4.5;
+    // Real spec, same day: the lead sits further out than the team row -- untested placeholder, like
+    // every other formation-geometry constant in this file.
+    private static final double LEAD_EXTRA_DISTANCE = 2.0D;
+    // How far left/right each team horse sits from the carriage's own forward center-line -- the
+    // base of the triangle. Untested placeholder.
+    private static final double TEAM_ABREAST_OFFSET = 1.0D;
 
     private Entity leadMount;
-    private Entity teamMount;
+    private Entity teamLeftMount;
+    private Entity teamRightMount;
     private final Entity[] companions = new Entity[COMPANION_SLOTS.length];
     private Leashable.LeashData leashData;
 
@@ -145,19 +170,17 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         return ModItems.BROKEN_CARRIAGE.get();
     }
 
-    /** Mirrors {@code WagonEntity#onEnterBrokenState}'s own doc -- de-summons both mount Summoning Stones, leaves all 6 Companions defending. */
+    /** Mirrors {@code WagonEntity#onEnterBrokenState}'s own doc -- de-summons all 3 mount Summoning Stones (Carriage redesign Phase 4: now a real 3-horse triangle, not 2), leaves all 6 Companions defending. */
     @Override
     protected void onEnterBrokenState(final ServerLevel level) {
         if (!LyfeSummoningBridge.isLoaded()) {
             return;
         }
-        final ItemStack leadStone = this.getItem(LEAD_SLOT);
-        if (!leadStone.isEmpty()) {
-            LyfeSummoningBridge.despawnMountCleanly(level, leadStone);
-        }
-        final ItemStack teamStone = this.getItem(TEAM_SLOT);
-        if (!teamStone.isEmpty()) {
-            LyfeSummoningBridge.despawnMountCleanly(level, teamStone);
+        for (final int slot : MOUNT_SLOTS) {
+            final ItemStack stone = this.getItem(slot);
+            if (!stone.isEmpty()) {
+                LyfeSummoningBridge.despawnMountCleanly(level, stone);
+            }
         }
     }
 
@@ -167,13 +190,11 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         if (!LyfeSummoningBridge.isLoaded()) {
             return;
         }
-        final ItemStack leadStone = this.getItem(LEAD_SLOT);
-        if (!leadStone.isEmpty()) {
-            LyfeSummoningBridge.despawnMountCleanly(level, leadStone);
-        }
-        final ItemStack teamStone = this.getItem(TEAM_SLOT);
-        if (!teamStone.isEmpty()) {
-            LyfeSummoningBridge.despawnMountCleanly(level, teamStone);
+        for (final int slot : MOUNT_SLOTS) {
+            final ItemStack stone = this.getItem(slot);
+            if (!stone.isEmpty()) {
+                LyfeSummoningBridge.despawnMountCleanly(level, stone);
+            }
         }
         for (int i = 0; i < COMPANION_SLOTS.length; i++) {
             final ItemStack stack = this.getItem(COMPANION_SLOTS[i]);
@@ -201,8 +222,7 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         // See WagonEntity#tick's own doc for the real re-summon bug this fixes, and the explicit
         // user spec it also satisfies ("they should not respawn if the wagon is broken either").
         if (!this.isBroken()) {
-            tickLeadSlot(serverLevel);
-            tickTeamSlot(serverLevel);
+            tickMounts(serverLevel);
         }
         tickCompanionSlots(serverLevel);
         syncTeamLeash();
@@ -327,56 +347,86 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         return LyfeSummoningBridge.getSummonedMountId(stone).map(id -> id.equals(entity.getUUID())).orElse(false);
     }
 
-    /** Same shape as {@code WagonEntity#tickLeadSlot}. */
-    private void tickLeadSlot(final ServerLevel level) {
-        if (this.leadMount != null && !stoneClaims(LEAD_SLOT, this.leadMount)) {
-            this.leadMount.discard();
-            this.leadMount = null;
+    /**
+     * Real bug fix, 2026-10-26 (Carriage redesign Phase 4): "the current team is missing the
+     * lead-slot horse entirely." Root cause, confirmed by re-reading the real previous
+     * {@code tickLeadSlot}/{@code tickTeamSlot} methods side by side -- both called the exact same
+     * {@code mountSpawnPosition()} (a single fixed point directly in front of the carriage) for
+     * their OWN independent summon, meaning the lead and team mount both spawned at the IDENTICAL
+     * position. {@code LyfeSummoningBridge.tickCompanion}'s own real implementation (confirmed via
+     * {@code summoning.GuardCompanionSupport#tickMount}) only ever uses the given position at the
+     * moment of a fresh summon -- once something is alive and tracked, later calls with the same
+     * position are ignored entirely, so this wasn't a continuous fight over one spot; the lead
+     * mount, having nothing else to reposition it afterward (unlike the team mount, which {@link
+     * #syncTeamFollow} actively chases away to its own formation slot every tick), simply sat
+     * exactly on top of the carriage's own pull point, visually indistinguishable from "not there at
+     * all" to a live player. Fixed by giving the lead its own real, distinct position -- see {@link
+     * #leadSpawnPosition()}/{@link #teamSpawnPosition(boolean)} for the actual triangle math this
+     * naturally folds into, since both problems ("no distinct lead position" and "no real triangle
+     * formation") had the same root fix.
+     *
+     * <p>Generalizes the old separate {@code tickLeadSlot}/{@code tickTeamSlot} methods into one,
+     * called once per real mount slot from {@link #tickMounts}.
+     */
+    private Entity tickMountSlot(final ServerLevel level, final int slot, final Entity current, final Vec3 spawnPos) {
+        Entity resolved = current;
+        if (resolved != null && !stoneClaims(slot, resolved)) {
+            resolved.discard();
+            resolved = null;
         }
-        final ItemStack stone = this.getItem(LEAD_SLOT);
+        final ItemStack stone = this.getItem(slot);
         if (stone.isEmpty() || !LyfeSummoningBridge.isLoaded()) {
-            return;
+            return resolved;
         }
-        final Vec3 leadSpawnPos = this.mountSpawnPosition();
-        LyfeSummoningBridge.tickCompanion(level, stone, this.getUUID(), leadSpawnPos.x, leadSpawnPos.y, leadSpawnPos.z, this.getYRot());
+        LyfeSummoningBridge.tickCompanion(level, stone, this.getUUID(), spawnPos.x, spawnPos.y, spawnPos.z, this.getYRot());
         final Optional<UUID> mountId = LyfeSummoningBridge.getSummonedMountId(stone);
         if (mountId.isEmpty()) {
-            return;
+            return resolved;
         }
         final Entity mount = level.getEntity(mountId.get());
         if (mount != null && mount.isAlive()) {
             mount.setInvulnerable(false);
-            if (this.leadMount != mount) {
+            if (resolved != mount) {
                 prepareCartMount(mount);
-                this.leadMount = mount;
+                resolved = mount;
             }
         }
+        return resolved;
     }
 
-    /** Same shape as {@link #tickLeadSlot}, tracking {@link #teamMount} instead. */
-    private void tickTeamSlot(final ServerLevel level) {
-        if (this.teamMount != null && !stoneClaims(TEAM_SLOT, this.teamMount)) {
-            this.teamMount.discard();
-            this.teamMount = null;
-        }
-        final ItemStack stone = this.getItem(TEAM_SLOT);
-        if (stone.isEmpty() || !LyfeSummoningBridge.isLoaded()) {
-            return;
-        }
-        final Vec3 teamSpawnPos = this.mountSpawnPosition();
-        LyfeSummoningBridge.tickCompanion(level, stone, this.getUUID(), teamSpawnPos.x, teamSpawnPos.y, teamSpawnPos.z, this.getYRot());
-        final Optional<UUID> mountId = LyfeSummoningBridge.getSummonedMountId(stone);
-        if (mountId.isEmpty()) {
-            return;
-        }
-        final Entity mount = level.getEntity(mountId.get());
-        if (mount != null && mount.isAlive()) {
-            mount.setInvulnerable(false);
-            if (this.teamMount != mount) {
-                prepareCartMount(mount);
-                this.teamMount = mount;
-            }
-        }
+    private void tickMounts(final ServerLevel level) {
+        this.leadMount = tickMountSlot(level, LEAD_SLOT, this.leadMount, leadSpawnPosition());
+        this.teamLeftMount = tickMountSlot(level, TEAM_LEFT_SLOT, this.teamLeftMount, teamSpawnPosition(true));
+        this.teamRightMount = tickMountSlot(level, TEAM_RIGHT_SLOT, this.teamRightMount, teamSpawnPosition(false));
+    }
+
+    /** The triangle's own tip -- straight out in front, further than the team row (see {@link #LEAD_EXTRA_DISTANCE}'s own doc). */
+    private Vec3 leadSpawnPosition() {
+        final float yaw = (float) Math.toRadians(this.getYRot());
+        final double fx = -Mth.sin(yaw);
+        final double fz = Mth.cos(yaw);
+        final double dist = this.getSpacing() + LEAD_EXTRA_DISTANCE;
+        return new Vec3(this.getX() + fx * dist, this.getY(), this.getZ() + fz * dist);
+    }
+
+    /**
+     * The triangle's own base -- 2 horses abreast, closer to the carriage than the lead. {@code
+     * left}'s sign convention matches {@link #isLeftSideClick}'s own real, already-live-test-proven
+     * "left/right" basis (positive along the {@code (cos(yaw), sin(yaw))} vector is left), not
+     * guessed independently.
+     */
+    private Vec3 teamSpawnPosition(final boolean left) {
+        final float yaw = (float) Math.toRadians(this.getYRot());
+        final double fx = -Mth.sin(yaw);
+        final double fz = Mth.cos(yaw);
+        final double rx = Mth.cos(yaw);
+        final double rz = Mth.sin(yaw);
+        final double sideSign = left ? 1.0D : -1.0D;
+        final double dist = this.getSpacing();
+        return new Vec3(
+                this.getX() + fx * dist + rx * TEAM_ABREAST_OFFSET * sideSign,
+                this.getY(),
+                this.getZ() + fz * dist + rz * TEAM_ABREAST_OFFSET * sideSign);
     }
 
     /**
@@ -451,43 +501,76 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         entity.setData(ModAttachments.CART_TEAM_MOUNT, Boolean.TRUE);
     }
 
-    /** Same shape as {@code WagonEntity#syncTeamLeash}. */
+    /** Generalized for 2 team horses (Carriage redesign Phase 4) -- both leash directly to the SAME lead, matching the real "lead to team" daisy chain, just 2 parallel leashes instead of 1. */
     private void syncTeamLeash() {
-        if (this.teamMount == null || !this.teamMount.isAlive() || this.leadMount == null || !this.leadMount.isAlive()) {
+        syncOneTeamLeash(this.teamLeftMount);
+        syncOneTeamLeash(this.teamRightMount);
+    }
+
+    private void syncOneTeamLeash(final Entity team) {
+        if (team == null || !team.isAlive() || this.leadMount == null || !this.leadMount.isAlive()) {
             return;
         }
-        if (this.teamMount instanceof Leashable leashable && leashable.getLeashHolder() != this.leadMount) {
+        if (team instanceof Leashable leashable && leashable.getLeashHolder() != this.leadMount) {
             leashable.setLeashedTo(this.leadMount, true);
         }
     }
 
-    /** Same shape as {@code WagonEntity#syncTeamFollow}. */
+    /**
+     * Generalized for 2 team horses, Carriage redesign Phase 4 -- real user spec, "2 horses abreast
+     * behind it." Unlike the old single-team-horse version (which just maintained a fixed DISTANCE
+     * directly behind the lead, direction-agnostic), each team horse now chases a real target POINT
+     * (the lead's own live position, offset back and to its own side by {@link #TEAM_FOLLOW_SPACING}/
+     * {@link #TEAM_ABREAST_OFFSET}) -- the only way to actually hold a left/right-distinguished
+     * abreast slot instead of both horses converging on the same trailing spot.
+     */
     private void syncTeamFollow() {
-        if (this.teamMount == null || !this.teamMount.isAlive() || this.leadMount == null || !this.leadMount.isAlive()) {
+        syncOneTeamFollow(this.teamLeftMount, true);
+        syncOneTeamFollow(this.teamRightMount, false);
+    }
+
+    private void syncOneTeamFollow(final Entity team, final boolean left) {
+        if (team == null || !team.isAlive() || this.leadMount == null || !this.leadMount.isAlive()) {
             return;
         }
-        final Vec3 toLead = this.leadMount.position().subtract(this.teamMount.position());
-        final Vec3 horizontal = new Vec3(toLead.x, 0.0D, toLead.z);
+        final float leadYawRad = (float) Math.toRadians(this.leadMount.getYRot());
+        final double bx = -Mth.sin(leadYawRad);
+        final double bz = Mth.cos(leadYawRad);
+        final double rx = Mth.cos(leadYawRad);
+        final double rz = Mth.sin(leadYawRad);
+        final double sideSign = left ? 1.0D : -1.0D;
+        final Vec3 targetPos = this.leadMount.position()
+                .subtract(new Vec3(bx, 0.0D, bz).scale(TEAM_FOLLOW_SPACING))
+                .add(new Vec3(rx, 0.0D, rz).scale(TEAM_ABREAST_OFFSET * sideSign));
+        final Vec3 toTarget = targetPos.subtract(team.position());
+        final Vec3 horizontal = new Vec3(toTarget.x, 0.0D, toTarget.z);
         if (horizontal.lengthSqr() < 1.0E-6D) {
             return;
         }
         final Vec3 direction = horizontal.normalize();
         final float heading = (float) Math.toDegrees(-Mth.atan2(direction.x, direction.z));
-        this.teamMount.setYRot(heading);
-        this.teamMount.setYHeadRot(heading);
-        final double diff = horizontal.length() - TEAM_FOLLOW_SPACING;
-        if (Math.abs(diff) < 1.0E-3D) {
+        team.setYRot(heading);
+        team.setYHeadRot(heading);
+        final double dist = horizontal.length();
+        if (dist < 1.0E-3D) {
             return;
         }
-        final double step = Math.min(Math.abs(diff), TEAM_CATCH_UP_RATE) * Math.signum(diff);
-        this.teamMount.move(MoverType.SELF, direction.scale(step));
+        final double step = Math.min(dist, TEAM_CATCH_UP_RATE);
+        team.move(MoverType.SELF, direction.scale(step));
     }
 
-    /** Same shape as {@code WagonEntity#syncWagonPullTarget}. */
+    /**
+     * Generalized for 2 team horses -- same "daisy chain, rearmost alive mount actually pulls"
+     * philosophy {@code WagonEntity}'s own doc explains, now with a defined preference order between
+     * the two parallel team horses (left, then right) when both are alive, since vanilla's own
+     * single-entity leash/pull-chase mechanism can't literally split across two pullers at once.
+     */
     private void syncWagonPullTarget() {
         final Entity rearmost;
-        if (this.teamMount != null && this.teamMount.isAlive()) {
-            rearmost = this.teamMount;
+        if (this.teamLeftMount != null && this.teamLeftMount.isAlive()) {
+            rearmost = this.teamLeftMount;
+        } else if (this.teamRightMount != null && this.teamRightMount.isAlive()) {
+            rearmost = this.teamRightMount;
         } else if (this.leadMount != null && this.leadMount.isAlive()) {
             rearmost = this.leadMount;
         } else {
@@ -556,7 +639,7 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
 
     @Override
     protected boolean canBePulledBy(final Entity entity) {
-        return stoneClaims(LEAD_SLOT, entity) || stoneClaims(TEAM_SLOT, entity);
+        return stoneClaims(LEAD_SLOT, entity) || stoneClaims(TEAM_LEFT_SLOT, entity) || stoneClaims(TEAM_RIGHT_SLOT, entity);
     }
 
     private static final double BENCH_CLICK_HEIGHT_FRACTION = 0.6;
@@ -782,14 +865,17 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         return !stack.isEmpty() && LyfeSummoningBridge.isLoaded() && !LyfeSummoningBridge.isOnCooldown(stack, System.currentTimeMillis());
     }
 
-    /** Mirrors {@code WagonEntity}'s own doc exactly -- {@link #LEAD_SLOT}/{@link #TEAM_SLOT} (real Summoning Stones) were never resolved here before, leaving them with zero slot-click destroy-roll protection regardless of click type. */
+    /** Mirrors {@code WagonEntity}'s own doc exactly -- {@link #LEAD_SLOT}/{@link #TEAM_LEFT_SLOT}/{@link #TEAM_RIGHT_SLOT} (real Summoning Stones) were never resolved here before, leaving them with zero slot-click destroy-roll protection regardless of click type. */
     @Override
     protected Entity getCompanionEntityForSlot(final int slotIndex) {
         if (slotIndex == LEAD_SLOT) {
             return this.leadMount;
         }
-        if (slotIndex == TEAM_SLOT) {
-            return this.teamMount;
+        if (slotIndex == TEAM_LEFT_SLOT) {
+            return this.teamLeftMount;
+        }
+        if (slotIndex == TEAM_RIGHT_SLOT) {
+            return this.teamRightMount;
         }
         for (int i = 0; i < COMPANION_SLOTS.length; i++) {
             if (COMPANION_SLOTS[i] == slotIndex) {

@@ -12,14 +12,25 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Carriage's combined menu -- same shape as {@link WagonMenu}, extended from 2 Companion slots to 6
  * (real user spec, 2026-10-26: "Driver and Passenger up front, and 4 internal seats for
- * non-combatants"): 2 reserved {@link MountSlot}s (lead/team, same as Wagon), then 6 reserved
- * {@link CompanionSlot}s -- front-left (Driver)/front-right (Passenger), then two more rows of 2
- * (the 4 interior seats). See {@code menu.client.CarriageScreen}'s own doc for the taller mount
+ * non-combatants"): 3 reserved {@link MountSlot}s (lead, plus 2 team slots abreast -- Carriage
+ * redesign Phase 4's real triangle/"spike" formation, see {@code CarriageEntity}'s own doc), then 6
+ * reserved {@link CompanionSlot}s -- front-left (Driver)/front-right (Passenger), then two more rows
+ * of 2 (the 4 interior seats). See {@code menu.client.CarriageScreen}'s own doc for the taller mount
  * panel this is laid out against (same width as Wagon's, just 3 more slot rows added).
+ *
+ * <p><b>Real layout change, Carriage redesign Phase 4</b>: the mount row grew from 2 slots to 3 (lead
+ * centered above, the 2 team slots side by side below it, visually mirroring the real triangle
+ * formation on the ground) -- every slot index from {@link #FRONT_LEFT_SLOT} on shifted by 1 from the
+ * old 2-mount-slot layout. The 2 team slots reuse the existing side-bench X positions ({@code
+ * SEAT_LEFT_X}/{@code SEAT_RIGHT_X}) at the old single team slot's own Y -- functional, not yet a
+ * bespoke matching panel texture (the existing {@code carriage_mount_panel.png} was generated via a
+ * Python script this environment doesn't have available; vanilla's own generic slot rendering works
+ * correctly regardless of whether the background art has a pre-drawn cutout there, so this is a real,
+ * flagged follow-up art pass, not a functional gap).
  */
 public final class CarriageMenu extends AbstractContainerMenu {
 
-    public static final int MOUNT_SLOT_COUNT = 2;
+    public static final int MOUNT_SLOT_COUNT = 3;
     public static final int COMPANION_SLOT_COUNT = 6;
     private static final int RESERVED_SLOT_COUNT = MOUNT_SLOT_COUNT + COMPANION_SLOT_COUNT;
     // Same 54-slot (6-row) cargo hold as the Wagon -- not asked to change, so left unchanged.
@@ -64,13 +75,14 @@ public final class CarriageMenu extends AbstractContainerMenu {
 
     private void layoutSlots(final Inventory inventory) {
         addSlot(new MountSlot(this.container, 0, MOUNT_X, MOUNT_LEAD_Y));
-        addSlot(new MountSlot(this.container, 1, MOUNT_X, MOUNT_TEAM_Y));
-        addSlot(new CompanionSlot(this.container, 2, SEAT_LEFT_X, FRONT_SEAT_Y));
-        addSlot(new CompanionSlot(this.container, 3, SEAT_RIGHT_X, FRONT_SEAT_Y));
-        addSlot(new CompanionSlot(this.container, 4, SEAT_LEFT_X, INTERIOR_SEAT_1_Y));
-        addSlot(new CompanionSlot(this.container, 5, SEAT_RIGHT_X, INTERIOR_SEAT_1_Y));
-        addSlot(new CompanionSlot(this.container, 6, SEAT_LEFT_X, INTERIOR_SEAT_2_Y));
-        addSlot(new CompanionSlot(this.container, 7, SEAT_RIGHT_X, INTERIOR_SEAT_2_Y));
+        addSlot(new MountSlot(this.container, 1, SEAT_LEFT_X, MOUNT_TEAM_Y));
+        addSlot(new MountSlot(this.container, 2, SEAT_RIGHT_X, MOUNT_TEAM_Y));
+        addSlot(new CompanionSlot(this.container, 3, SEAT_LEFT_X, FRONT_SEAT_Y));
+        addSlot(new CompanionSlot(this.container, 4, SEAT_RIGHT_X, FRONT_SEAT_Y));
+        addSlot(new CompanionSlot(this.container, 5, SEAT_LEFT_X, INTERIOR_SEAT_1_Y));
+        addSlot(new CompanionSlot(this.container, 6, SEAT_RIGHT_X, INTERIOR_SEAT_1_Y));
+        addSlot(new CompanionSlot(this.container, 7, SEAT_LEFT_X, INTERIOR_SEAT_2_Y));
+        addSlot(new CompanionSlot(this.container, 8, SEAT_RIGHT_X, INTERIOR_SEAT_2_Y));
         for (int i = 0; i < CARGO_SLOT_COUNT; i++) {
             final int col = i % 9;
             final int row = i / 9;

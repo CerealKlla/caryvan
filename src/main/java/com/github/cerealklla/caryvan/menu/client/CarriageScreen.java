@@ -78,16 +78,22 @@ public final class CarriageScreen extends AbstractContainerScreen<CarriageMenu> 
         }
     }
 
+    /**
+     * Real layout shift, Carriage redesign Phase 4, 2026-10-26: the mount row grew from 2 slots to
+     * 3 (lead, plus 2 team slots abreast -- see {@code CarriageMenu}'s own doc for the real triangle
+     * formation this matches) -- every index from the old Driver seat on shifts by 1.
+     */
     private static Component slotLabel(final Slot slot) {
         return switch (slot.index) {
             case 0 -> Component.literal("Lead Mount").withStyle(ChatFormatting.GRAY);
-            case 1 -> Component.literal("Team Mount").withStyle(ChatFormatting.GRAY);
-            case 2 -> Component.literal("Driver / NPC Pilot Seat").withStyle(ChatFormatting.BLUE);
-            case 3 -> Component.literal("Passenger Seat").withStyle(ChatFormatting.DARK_GREEN);
-            case 4 -> Component.literal("Interior Seat (left)").withStyle(ChatFormatting.BLUE);
-            case 5 -> Component.literal("Interior Seat (right)").withStyle(ChatFormatting.DARK_GREEN);
-            case 6 -> Component.literal("Interior Seat (left)").withStyle(ChatFormatting.BLUE);
-            case 7 -> Component.literal("Interior Seat (right)").withStyle(ChatFormatting.DARK_GREEN);
+            case 1 -> Component.literal("Team Mount (left)").withStyle(ChatFormatting.GRAY);
+            case 2 -> Component.literal("Team Mount (right)").withStyle(ChatFormatting.GRAY);
+            case 3 -> Component.literal("Driver / NPC Pilot Seat").withStyle(ChatFormatting.BLUE);
+            case 4 -> Component.literal("Passenger Seat").withStyle(ChatFormatting.DARK_GREEN);
+            case 5 -> Component.literal("Interior Seat (left)").withStyle(ChatFormatting.BLUE);
+            case 6 -> Component.literal("Interior Seat (right)").withStyle(ChatFormatting.DARK_GREEN);
+            case 7 -> Component.literal("Interior Seat (left)").withStyle(ChatFormatting.BLUE);
+            case 8 -> Component.literal("Interior Seat (right)").withStyle(ChatFormatting.DARK_GREEN);
             default -> null;
         };
     }
