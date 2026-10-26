@@ -642,6 +642,23 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         return stoneClaims(LEAD_SLOT, entity) || stoneClaims(TEAM_LEFT_SLOT, entity) || stoneClaims(TEAM_RIGHT_SLOT, entity);
     }
 
+    /**
+     * Real client-side need, 2026-10-26: {@code CarriageRenderer}'s own custom leash-rope rendering
+     * needs both live team mounts directly (not just whichever single one vanilla's own one-holder
+     * {@link #getLeashHolder()} happens to be) to draw the real triangle rope topology (lead-to-each-
+     * team, team-to-team, and each team horse individually down to the carriage -- see the user's own
+     * reference diagram). {@link #getCompanionEntityForSlot(int)} already resolves these but is
+     * {@code protected} (same-package/subclass only); the renderer lives in a different package, so
+     * these two small public getters exist purely for that cross-package read.
+     */
+    public Entity getTeamLeftMount() {
+        return this.teamLeftMount;
+    }
+
+    public Entity getTeamRightMount() {
+        return this.teamRightMount;
+    }
+
     private static final double BENCH_CLICK_HEIGHT_FRACTION = 0.6;
 
     /**

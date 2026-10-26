@@ -74,6 +74,19 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         buildLeashRopes(entity, state, partialTicks);
     }
 
+    /**
+     * Real user reference diagram, 2026-10-26 (3 green squares = lead/team-left/team-right, orange
+     * rounded rect = the Carriage): lead-to-team-left and lead-to-team-right already render for free
+     * via vanilla's own generic per-{@code Leashable} rope rendering (both team horses really are
+     * leashed to the lead, see {@code CarriageEntity#syncOneTeamLeash}) -- those two need no code
+     * here at all. What the diagram adds on top, and what this method now actually builds: each team
+     * horse individually tethered down to the carriage (not both of the carriage's own quad-offset
+     * ropes converging on whichever single horse {@code CarriageEntity#syncWagonPullTarget}'s own
+     * one-holder preference happened to pick as the real vanilla pull target), plus a genuinely new
+     * direct team-left-to-team-right rope -- not a real vanilla leash relationship (both are actually
+     * leashed to the lead, not each other), so nothing renders it automatically; built the exact same
+     * custom-{@link EntityRenderState.LeashState} way the carriage's own ropes always have been.
+     */
     private void buildLeashRopes(final CarriageEntity entity, final CarriageRenderState state, final float partialTicks) {
         final Entity holder = entity.getLeashHolder();
         if (holder == null) {
@@ -82,25 +95,56 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
         }
         final float bodyRotRad = (float) Math.toRadians(entity.getPreciseBodyRotation(partialTicks));
         final Vec3 entityPos = entity.getPosition(partialTicks);
-        final Vec3 ropeHoldPos = holder.getRopeHoldPosition(partialTicks);
-        final int startBlockLight = this.getBlockLightLevel(entity, BlockPos.containing(entity.getEyePosition(partialTicks)));
-        final int endBlockLight = this.getBlockLightLevel(entity, BlockPos.containing(holder.getEyePosition(partialTicks)));
-        final int startSkyLight = entity.level().getBrightness(LightLayer.SKY, BlockPos.containing(entity.getEyePosition(partialTicks)));
-        final int endSkyLight = entity.level().getBrightness(LightLayer.SKY, BlockPos.containing(holder.getEyePosition(partialTicks)));
+        final int startBlockLight = getBlockLightLevel(entity, partialTicks);
+        final int startSkyLight = getSkyLightLevel(entity, partialTicks);
 
-        final List<EntityRenderState.LeashState> ropes = new ArrayList<>(2);
-        for (final Vec3 localOffset : entity.getQuadLeashOffsets()) {
-            final EntityRenderState.LeashState rope = new EntityRenderState.LeashState();
-            rope.offset = localOffset.yRot(-bodyRotRad);
-            rope.start = entityPos.add(rope.offset);
-            rope.end = ropeHoldPos;
-            rope.startBlockLight = startBlockLight;
-            rope.endBlockLight = endBlockLight;
-            rope.startSkyLight = startSkyLight;
-            rope.endSkyLight = endSkyLight;
-            ropes.add(rope);
+        final List<EntityRenderState.LeashState> ropes = new ArrayList<>(3);
+        final Vec3[] offsets = entity.getQuadLeashOffsets();
+        final Vec3 leftCarriageOffset = entityPos.add(offsets[0].yRot(-bodyRotRad));
+        final Vec3 rightCarriageOffset = entityPos.add(offsets[1].yRot(-bodyRotRad));
+
+        final Entity teamLeft = entity.getTeamLeftMount();
+        final Entity teamRight = entity.getTeamRightMount();
+        final boolean teamLeftAlive = teamLeft != null && teamLeft.isAlive();
+        final boolean teamRightAlive = teamRight != null && teamRight.isAlive();
+
+        if (teamLeftAlive && teamRightAlive) {
+            addRope(ropes, leftCarriageOffset, startBlockLight, startSkyLight, teamLeft, partialTicks);
+            addRope(ropes, rightCarriageOffset, startBlockLight, startSkyLight, teamRight, partialTicks);
+            addRope(ropes, teamLeft.getRopeHoldPosition(partialTicks), getBlockLightLevel(teamLeft, partialTicks),
+                    getSkyLightLevel(teamLeft, partialTicks), teamRight, partialTicks);
+        } else {
+            // Fallback -- fewer than 2 live team horses (e.g. mid-respawn, or one was lost picking up
+            // a Broken carriage): both carriage-side ropes converge on whichever single mount vanilla's
+            // own one-holder model actually picked, same behavior this method always had.
+            addRope(ropes, leftCarriageOffset, startBlockLight, startSkyLight, holder, partialTicks);
+            addRope(ropes, rightCarriageOffset, startBlockLight, startSkyLight, holder, partialTicks);
         }
         state.leashStates = ropes;
+    }
+
+    private void addRope(final List<EntityRenderState.LeashState> ropes, final Vec3 start, final int startBlockLight,
+            final int startSkyLight, final Entity endEntity, final float partialTicks) {
+        final EntityRenderState.LeashState rope = new EntityRenderState.LeashState();
+        rope.start = start;
+        rope.end = endEntity.getRopeHoldPosition(partialTicks);
+        rope.startBlockLight = startBlockLight;
+        rope.endBlockLight = getBlockLightLevel(endEntity, partialTicks);
+        rope.startSkyLight = startSkyLight;
+        rope.endSkyLight = getSkyLightLevel(endEntity, partialTicks);
+        ropes.add(rope);
+    }
+
+    // Not EntityRenderer#getBlockLightLevel -- that protected helper is typed to this renderer's own
+    // T (CarriageEntity), not a general Entity, so it can't be called for an arbitrary team mount.
+    // Queries the level's own light engine directly instead, same approach #getSkyLightLevel already
+    // used (this method always had to hand-roll sky light for exactly this reason).
+    private static int getBlockLightLevel(final Entity entity, final float partialTicks) {
+        return entity.level().getBrightness(LightLayer.BLOCK, BlockPos.containing(entity.getEyePosition(partialTicks)));
+    }
+
+    private static int getSkyLightLevel(final Entity entity, final float partialTicks) {
+        return entity.level().getBrightness(LightLayer.SKY, BlockPos.containing(entity.getEyePosition(partialTicks)));
     }
 
     /** Mirrors {@code WagonRenderer}'s own doc exactly. */
