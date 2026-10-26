@@ -122,8 +122,10 @@ public final class CarriageMenu extends AbstractContainerMenu {
                 cart.requestPickUpConfirm(player);
                 return true;
             }
-            if (id == com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity.REPAIR_BUTTON_ID) {
-                cart.handleRepairAttempt(player, player.getMainHandItem());
+            if (id == com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity.REPAIR_BUTTON_ID
+                    && cart instanceof com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnInventoryEntity inventoryCart) {
+                // See WagonMenu's own doc -- reads from cargo now, not the player's held item.
+                inventoryCart.handleRepairFromCargo(player);
                 return true;
             }
         }

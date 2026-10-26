@@ -149,6 +149,57 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
     }
 
     /**
+     * Real live-test gap, 2026-10-26: the GUI "Repair" button read {@code player.getMainHandItem()}
+     * -- the same held-item requirement the sneak+right-click world gesture deliberately uses -- but
+     * a player naturally stores spare Wheels IN the cart's own cargo for a repair run, not in their
+     * hand. If they weren't literally holding one, the button silently did nothing regardless of how
+     * many Wheels sat in cargo, which could easily read as "it needs ALL the wheels before it'll do
+     * anything" even though {@link #repair(int)}'s own math has always been a correct partial repair
+     * ({@code Math.min(wheelsAvailable, brokenWheelCount)}, confirmed by re-reading it directly, not
+     * an all-or-nothing gate anywhere). This scans the cart's own cargo instead, consuming across
+     * however many stacks it takes.
+     */
+    public void handleRepairFromCargo(final Player player) {
+        if (this.isRecentlyDamaged()) {
+            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                    "This cart was recently damaged and can't be repaired yet."));
+            return;
+        }
+        if (this.getBrokenWheelCount() <= 0) {
+            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                    "This cart's wheels are already in good repair."));
+            return;
+        }
+        final net.minecraft.world.item.Item wheelsItem = com.github.cerealklla.caryvan.registration.ModItems.wheelsFor(this.getWoodType());
+        int available = 0;
+        for (int i = 0; i < this.getContainerSize(); i++) {
+            final ItemStack stack = this.getItem(i);
+            if (stack.getItem() == wheelsItem) {
+                available += stack.getCount();
+            }
+        }
+        if (available <= 0) {
+            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                    "No matching Wheels found in this cart's cargo."));
+            return;
+        }
+        final int fixed = this.repair(available);
+        if (fixed > 0) {
+            int remaining = fixed;
+            for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+                final ItemStack stack = this.getItem(i);
+                if (stack.getItem() == wheelsItem) {
+                    final int take = Math.min(remaining, stack.getCount());
+                    stack.shrink(take);
+                    remaining -= take;
+                }
+            }
+            player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                    "Repaired " + fixed + " wheel" + (fixed == 1 ? "" : "s") + "."));
+        }
+    }
+
+    /**
      * Spills real cargo at Pick Up -- through a real Yconomics Loot Bag
      * ({@code bridge.YconomicsLootBagBridge#depositOrScatter}, see its own doc) when Yconomics is
      * loaded, falling back to plain vanilla item drops otherwise (a Yconomics-less server has no
