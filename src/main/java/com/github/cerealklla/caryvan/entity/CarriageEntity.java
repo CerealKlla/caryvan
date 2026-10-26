@@ -529,6 +529,31 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         syncOneTeamFollow(this.teamRightMount, false);
     }
 
+    // Real live-test bug, 2026-10-26: both team horses visibly "turning in place of their own
+    // accord" while stationary in formation (and, in an earlier report, the active puller
+    // specifically drifting/"wandering" -- see #syncOneTeamFollow's own doc for why that's believed
+    // to be the same root cause). The old guards only skipped re-aiming/re-stepping once within
+    // sqrt(1e-6)=0.001 blocks of the target -- far tighter than the real per-tick positional noise
+    // (the lead's own tiny physics settling, leash elasticity) a horse actually converges to in
+    // practice, so they almost never actually triggered. A real "close enough, hold still" distance
+    // instead.
+    private static final double TEAM_SETTLE_DISTANCE = 0.15D;
+
+    /**
+     * Real root-cause fix, 2026-10-26: once a team horse is basically at its formation slot but not
+     * within the old guard's sub-millimeter tolerance, {@code Mth.atan2} on the resulting near-zero
+     * {@code direction} vector is numerically unstable -- a sub-millimeter shift in either horse's
+     * own position (simple physics settling, no AI involved) flips the computed heading by a large
+     * angle, every tick, for both {@code setYRot} and {@code setYHeadRot} -- reading as continuous
+     * spinning. The same noisy {@code direction} also drove {@code team.move(...)}, so it also
+     * produced small, direction-flipping real displacement each tick, which accumulated over many
+     * ticks reads as aimless wandering -- worse for whichever horse is also the active puller, since
+     * its position additionally feeds {@link #syncWagonPullTarget()}/{@code pulledTick()}'s own
+     * chase physics, compounding the jitter into real cumulative drift the non-puller horse's
+     * identical jitter doesn't get fed back into. Real fix: stop re-aiming AND re-stepping entirely
+     * once within a real {@link #TEAM_SETTLE_DISTANCE}, instead of chasing an exact, noise-sensitive
+     * point every tick regardless of how close the horse already is.
+     */
     private void syncOneTeamFollow(final Entity team, final boolean left) {
         if (team == null || !team.isAlive() || this.leadMount == null || !this.leadMount.isAlive()) {
             return;
@@ -544,17 +569,14 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
                 .add(new Vec3(rx, 0.0D, rz).scale(TEAM_ABREAST_OFFSET * sideSign));
         final Vec3 toTarget = targetPos.subtract(team.position());
         final Vec3 horizontal = new Vec3(toTarget.x, 0.0D, toTarget.z);
-        if (horizontal.lengthSqr() < 1.0E-6D) {
+        final double dist = horizontal.length();
+        if (dist < TEAM_SETTLE_DISTANCE) {
             return;
         }
         final Vec3 direction = horizontal.normalize();
         final float heading = (float) Math.toDegrees(-Mth.atan2(direction.x, direction.z));
         team.setYRot(heading);
         team.setYHeadRot(heading);
-        final double dist = horizontal.length();
-        if (dist < 1.0E-3D) {
-            return;
-        }
         final double step = Math.min(dist, TEAM_CATCH_UP_RATE);
         team.move(MoverType.SELF, direction.scale(step));
     }
@@ -579,6 +601,38 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         if (this.getPulling() != rearmost) {
             this.setPulling(rearmost);
         }
+    }
+
+    /**
+     * Real structural fix, 2026-10-26 -- user report from a close-up screenshot: "the placement of
+     * the carriage seems to be centered behind the left horse, not centered between the team
+     * horses," with the second horse's own rope visually dangling instead of connecting anywhere
+     * real. Root cause: {@link #syncWagonPullTarget()}'s own left-then-right preference has to
+     * register exactly one real {@link Entity} as {@link #getPulling()} -- vanilla's {@code
+     * Leashable} interface genuinely only supports one holder, that part isn't changeable -- but the
+     * base class's own towing PHYSICS ({@code AbstractDamageableDrawnEntity#pulledTick()}) used to
+     * chase that single registered entity's literal position too, which is what actually produced
+     * the off-center hitch. Overriding {@link #pullAnchor()} decouples the two: {@link #getPulling()}
+     * still names one real horse (for the vanilla leash-holder bookkeeping {@code
+     * #syncWagonLeashVisual()} needs), but the physics this cart's body actually chases is now the
+     * real midpoint between both live team mounts -- reading as genuinely, symmetrically hitched
+     * between them. The rope-rendering fix from earlier the same day needed no changes at all: each
+     * rope's own start point was already computed as an offset from this entity's real position (see
+     * {@code CarriageRenderer#buildLeashRopes}), so once that real position is correctly centered,
+     * both ropes read as properly connected on their own.
+     */
+    @Override
+    protected PullAnchor pullAnchor() {
+        final boolean leftAlive = this.teamLeftMount != null && this.teamLeftMount.isAlive();
+        final boolean rightAlive = this.teamRightMount != null && this.teamRightMount.isAlive();
+        if (leftAlive && rightAlive) {
+            final Vec3 midpoint = this.teamLeftMount.position().add(this.teamRightMount.position()).scale(0.5D);
+            final float yRot = this.leadMount != null && this.leadMount.isAlive() ? this.leadMount.getYRot() : this.teamLeftMount.getYRot();
+            final boolean onGround = this.teamLeftMount.onGround() && this.teamRightMount.onGround();
+            final double bbWidth = (this.teamLeftMount.getBbWidth() + this.teamRightMount.getBbWidth()) / 2.0D + TEAM_ABREAST_OFFSET * 2.0D;
+            return new PullAnchor(midpoint, yRot, onGround, bbWidth);
+        }
+        return super.pullAnchor();
     }
 
     /** Same shape as {@code WagonEntity#syncWagonLeashVisual}. */

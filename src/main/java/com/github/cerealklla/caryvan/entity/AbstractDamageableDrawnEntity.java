@@ -845,7 +845,8 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         if (this.pulling == null) {
             return;
         }
-        final Vec3 pullerPos = this.pulling.position();
+        final PullAnchor anchor = this.pullAnchor();
+        final Vec3 pullerPos = anchor.position();
         final double pullerSpeed;
         if (this.pullerPrevPos == null) {
             pullerSpeed = 0.0D;
@@ -855,7 +856,7 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             pullerSpeed = Math.sqrt(pdx * pdx + pdz * pdz);
         }
         this.pullerPrevPos = pullerPos;
-        Vec3 targetVec = relativeTargetVec();
+        Vec3 targetVec = relativeTargetVec(anchor);
         this.setYRot(yawTowards(targetVec));
         while (this.getYRot() - this.yRotO < -180.0F) {
             this.yRotO -= 360.0F;
@@ -864,10 +865,10 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             this.yRotO += 360.0F;
         }
 
-        if (this.pulling.onGround()) {
+        if (anchor.onGround()) {
             targetVec = new Vec3(targetVec.x, 0.0D, targetVec.z);
         }
-        final double relativeSpacing = Math.max(this.getSpacing() + 0.5D * this.pulling.getBbWidth(), 1.0D);
+        final double relativeSpacing = Math.max(this.getSpacing() + 0.5D * anchor.bbWidth(), 1.0D);
         final double diff = targetVec.length() - relativeSpacing;
         if (diff > MAX_SLACK_BLOCKS && this.canDetachFromPuller()) {
             this.setPulling(null);
@@ -884,9 +885,34 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         if (!this.isAlive()) {
             return;
         }
-        if (relativeTargetVec().length() > relativeSpacing + MAX_SLACK_BLOCKS && this.canDetachFromPuller()) {
+        if (relativeTargetVec(this.pullAnchor()).length() > relativeSpacing + MAX_SLACK_BLOCKS && this.canDetachFromPuller()) {
             this.setPulling(null);
         }
+    }
+
+    /**
+     * A lightweight bundle of exactly what {@link #pulledTick()}/{@link #relativeTargetVec} read off
+     * the puller, so {@link #pullAnchor()} can be overridden to chase a computed virtual point
+     * instead of literally reading a single live {@link Entity}.
+     */
+    protected record PullAnchor(Vec3 position, float yRot, boolean onGround, double bbWidth) {}
+
+    /**
+     * The real point/orientation this cart's towing physics chases each tick -- defaults to {@link
+     * #pulling}'s own live state, preserving this class's original single-puller behavior for every
+     * subclass that doesn't override it (Wagon, and this class itself for Carriage's lead-only/one-
+     * team-horse-alive fallback cases). {@code CarriageEntity} overrides this to chase the real
+     * midpoint between its 2 team mounts instead -- real user report, 2026-10-26: with the carriage
+     * anchored to whichever single horse vanilla's one-holder leash/pull model happened to register
+     * as {@link #pulling} (see {@code CarriageEntity#syncWagonPullTarget}'s own left-then-right
+     * preference), the whole body visually read as hitched behind that one horse specifically, off-
+     * center, with the second horse's own rope never actually connecting anywhere real (the rope's
+     * own start point is computed as an offset from this entity's own, now visibly off-center,
+     * position -- see {@code CarriageRenderer#buildLeashRopes}, unchanged by this fix since it was
+     * already geometrically correct relative to wherever this entity's real position actually is).
+     */
+    protected PullAnchor pullAnchor() {
+        return new PullAnchor(this.pulling.position(), this.pulling.getYRot(), this.pulling.onGround(), this.pulling.getBbWidth());
     }
 
     /** Defaults to {@code false}, same as {@link AbstractDrawnEntity#canDetachFromPuller()} -- Wagon/Carriage never voluntarily detach from a still-alive puller. */
@@ -900,11 +926,11 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         }
     }
 
-    private Vec3 relativeTargetVec() {
-        final double x = this.pulling.getX() - this.getX();
-        final double y = this.pulling.getY() - this.getY();
-        final double z = this.pulling.getZ() - this.getZ();
-        final float yaw = (float) Math.toRadians(this.pulling.getYRot());
+    private Vec3 relativeTargetVec(final PullAnchor anchor) {
+        final double x = anchor.position().x - this.getX();
+        final double y = anchor.position().y - this.getY();
+        final double z = anchor.position().z - this.getZ();
+        final float yaw = (float) Math.toRadians(anchor.yRot());
         final float nx = -Mth.sin(yaw);
         final float nz = Mth.cos(yaw);
         final double r = 0.2D;
