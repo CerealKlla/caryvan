@@ -373,10 +373,13 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
 
     /**
      * Refreshes {@link #brokenWheelCount} from {@link #computeBrokenWheelCount()} and syncs it onto
-     * the renderer -- call this after EVERY change to current health, whichever direction (damage OR
-     * healing of any kind). This is what makes a wheel un-break automatically and immediately as
-     * health rises back past a threshold, with no special-casing needed anywhere -- healing
-     * naturally "fixes" a wheel the exact same way taking damage naturally "broke" it.
+     * the renderer. Called after {@link #actuallyHurt}'s own hit and after {@link #repair(int)}'s own
+     * instant partial heal -- both genuinely able to move health across a wheel threshold. Real
+     * design correction, 2026-10-26: deliberately NOT called from {@link #tickRepairStateMachine()}'s
+     * own passive heal-over-time tick -- a wheel must never un-break from passive healing alone, per
+     * the user's own exact words, "they should ONLY be repaired by consuming a wheel with the repair
+     * button." That method's own Temp Max HP ceiling cap already guarantees its heal can never cross
+     * a threshold in the first place, so there is nothing for a call here to ever actually change.
      */
     private void refreshBrokenWheelCount() {
         this.brokenWheelCount = computeBrokenWheelCount();
@@ -447,6 +450,17 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * exactly what it says structurally: outside an active Passive Repair window (this method) or
      * {@link #repair(int)}'s own instant partial heal, current health never moves on its own at all --
      * re-confirmed true by grepping this entire class for every {@code setHealth(} call site.
+     *
+     * <p>Real design correction, same day, walking back an earlier over-extension: a wheel must
+     * NEVER un-break from passive healing of any kind (neither this auto-triggered window nor the
+     * heal-over-time window {@link #repair(int)} itself kicks off) -- only {@link #repair(int)}'s own
+     * instant partial heal (consuming a real Wheel) is allowed to do that, per the user's own exact
+     * words: "they should ONLY be repaired by consuming a wheel with the repair button." This method
+     * deliberately does NOT call {@link #refreshBrokenWheelCount()} after its own heal -- the cap
+     * below already guarantees health can never rise past the live {@link #getTempMaxHealthCeiling()}
+     * (itself derived from the CURRENT {@link #brokenWheelCount}), so {@link #computeBrokenWheelCount()}
+     * run against that capped health can mathematically never come out lower than it already was; a
+     * wheel can only ever lower it via {@link #repair(int)} raising health past that ceiling first.
      */
     private void tickRepairStateMachine() {
         final long now = System.currentTimeMillis();
@@ -466,19 +480,15 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
                 // every call), NOT #getMaxHealth() -- the real max-health attribute never changes, so
                 // capping against it would let no-wheel-replaced passive healing reach all the way back
                 // to full, which is exactly what this ceiling exists to prevent (per the user's own
-                // design correction -- see #getTempMaxHealthCeiling's own doc). This ceiling itself
-                // rises automatically mid-window if a heal tick pushes current HP far enough to
-                // un-break a wheel (see #refreshBrokenWheelCount below) -- expected, not a bug, per the
-                // user's own correction to #computeBrokenWheelCount's doc.
+                // design correction -- see #getTempMaxHealthCeiling's own doc). This cap is also what
+                // guarantees a wheel can never un-break from this heal alone -- see this method's own
+                // doc for why #refreshBrokenWheelCount is deliberately NOT called here.
                 final float tempMaxCeiling = getTempMaxHealthCeiling();
                 if (this.getHealth() < tempMaxCeiling) {
                     final float healPerTick = (PASSIVE_REPAIR_FRACTION_OF_BASE * this.getBaseMaxHealth()) / (PASSIVE_REPAIR_MILLIS / 50L);
                     // Explicitly clamped to the ceiling -- setHealth() alone only clamps to the real,
                     // unchanging max-health attribute, which is no longer narrow enough to rely on.
                     this.setHealth(Math.min(this.getHealth() + healPerTick, tempMaxCeiling));
-                    // A wheel un-breaks automatically here, as a natural consequence of current health
-                    // rising, exactly the same mechanism that broke it -- no special-casing needed.
-                    refreshBrokenWheelCount();
                 }
             }
         }
