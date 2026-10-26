@@ -35,8 +35,9 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     // Real live-test feedback, 2026-10-26: "widen the wheel well again, moving them another 5%
     // apart or so" -- a wheel-only multiplier on top of TRACK_SCALE, since TRACK_SCALE itself is
     // deliberately shared with the body's own X-axis dimensions here (see this class's own doc) --
-    // widening it directly would also widen the body, which wasn't asked for.
-    private static final float WHEEL_TRACK_EXTRA_SCALE = 1.05F;
+    // widening it directly would also widen the body, which wasn't asked for. Widened a second time
+    // same day: "widen another 10% across the width" -- 1.05 * 1.10 = 1.155.
+    private static final float WHEEL_TRACK_EXTRA_SCALE = 1.155F;
 
     private final ModelPart leftWheelFront;
     private final ModelPart rightWheelFront;
@@ -53,16 +54,12 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
     }
 
     @Override
-    /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly -- 4 independent wheels, same index order. */
+    /** Mirrors {@code WagonModel#setupAnim}'s own doc exactly -- 4 independent wheels, same index order, always geometrically present/attached regardless of broken state. */
     public void setupAnim(final CarriageRenderState state) {
         this.leftWheelFront.xRot = state.wheelRotation[0];
         this.rightWheelFront.xRot = state.wheelRotation[1];
         this.leftWheelBack.xRot = state.wheelRotation[2];
         this.rightWheelBack.xRot = state.wheelRotation[3];
-        this.leftWheelFront.visible = !state.wheelBroken[0];
-        this.rightWheelFront.visible = !state.wheelBroken[1];
-        this.leftWheelBack.visible = !state.wheelBroken[2];
-        this.rightWheelBack.visible = !state.wheelBroken[3];
     }
 
     public static LayerDefinition createLayer() {

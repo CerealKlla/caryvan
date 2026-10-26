@@ -77,9 +77,18 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
     /**
      * Real bug fix, 2026-10-26: Wagon genuinely has 4 independent wheels (see {@code
      * WagonRenderState#wheelRotation}'s own doc) -- each of the 4 real {@code ModelPart}s here now
-     * gets its own independent rotation/visibility from the matching array index (0 = leftFront,
-     * 1 = rightFront, 2 = leftBack, 3 = rightBack, matching this class's own child declaration order
+     * gets its own independent rotation from the matching array index (0 = leftFront, 1 =
+     * rightFront, 2 = leftBack, 3 = rightBack, matching this class's own child declaration order
      * exactly), replacing the old left/right-shared-across-front-and-back pairing.
+     *
+     * <p>Design reversal, same day, real live-test feedback: a broken wheel no longer hides its own
+     * {@code ModelPart} (the earlier pass's approach) -- "I would like to see a visibly broken wheel
+     * still attached... it could still 'limp along' on the broken wheel until they all are broken,
+     * then it'd crash onto the ground." A wheel stays geometrically present and keeps rotating
+     * regardless of its own broken state; the damaged look now comes entirely from
+     * {@code WagonRenderer}'s own whole-body "wheels damaged" texture tier instead (see that class's
+     * own doc), and the dramatic full-wreck presentation (tilt, broken texture) is reserved for the
+     * fully-Broken (0 HP, all 4 wheels broken) state alone.
      */
     @Override
     public void setupAnim(final WagonRenderState state) {
@@ -87,10 +96,6 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         this.rightWheelFront.xRot = state.wheelRotation[1];
         this.leftWheelBack.xRot = state.wheelRotation[2];
         this.rightWheelBack.xRot = state.wheelRotation[3];
-        this.leftWheelFront.visible = !state.wheelBroken[0];
-        this.rightWheelFront.visible = !state.wheelBroken[1];
-        this.leftWheelBack.visible = !state.wheelBroken[2];
-        this.rightWheelBack.visible = !state.wheelBroken[3];
     }
 
     // Real user report, 2026-10-25: "lengthen the wagon by about 50%; the wheels are overlaping
@@ -105,8 +110,9 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
     // Real user report, 2026-10-25: "The wheels need to be wider bit a little bit, maybe 10%" --
     // the wheel TRACK (how far apart the left/right wheels sit), not the wheels' own thickness.
     // Widened again 2026-10-26, real live-test feedback: "widen the wheel well again, moving them
-    // another 5% apart or so" -- 1.1 -> 1.155.
-    private static final float TRACK_SCALE = 1.155F;
+    // another 5% apart or so" -- 1.1 -> 1.155. Widened a third time same day: "widen another 10%
+    // across the width" -- 1.155 * 1.10 = 1.2705.
+    private static final float TRACK_SCALE = 1.2705F;
 
     public static LayerDefinition createLayer() {
         final EasyMeshBuilder root = new EasyMeshBuilder("root");

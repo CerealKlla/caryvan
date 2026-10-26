@@ -60,12 +60,20 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
 
     // Health system, 2026-10-26: a fully desaturated/darkened variant for the complete Broken-Wagon
     // body swap at 0 HP, same "desaturate = damaged" convention as the Broken Wagon item icon.
-    // (The earlier "wheels damaged" texture-only variant was dropped, 2026-10-26, after real
-    // live-test feedback that a subtle recolor read as "nothing visibly changed" -- a broken wheel
-    // now hides that wheel's own ModelPart entirely instead, see WagonModel#setupAnim.)
     private static final Map<String, Identifier> BROKEN_TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + "_broken.png")));
+
+    // Design reversal, same day: a broken wheel no longer hides its own ModelPart (see
+    // WagonModel#setupAnim's own doc) -- "I would like to see a visibly broken wheel still attached"
+    // instead, reusing the real per-wood "wheels damaged" texture art already built for the earlier
+    // Wheels/Broken-item icon rework (the same desaturated/cracked visual language, just applied as
+    // a whole-body entity texture variant instead of an item icon). Used whenever at least one wheel
+    // is broken but the cart as a whole isn't yet fully Broken (0 HP, all 4 wheels broken) -- that
+    // dramatic full-wreck state is reserved for BROKEN_TEXTURES alone.
+    private static final Map<String, Identifier> WHEELS_DAMAGED_TEXTURES = WoodType.values()
+            .collect(Collectors.toMap(WoodType::name,
+                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/wagon_" + type.name() + "_wheels_damaged.png")));
 
     private final WagonModel model;
 
@@ -138,12 +146,21 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
             poseStack.mulPose(Axis.ZP.rotationDegrees(BROKEN_TILT_DEGREES));
         }
         this.model.setupAnim(state);
-        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : TEXTURES;
+        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : anyWheelBroken(state) ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
         final Identifier texture = textureSet.getOrDefault(state.woodType, textureSet.get(WoodType.OAK.name()));
         final RenderType renderType = this.model.renderType(texture);
         submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,
                 OverlayTexture.NO_OVERLAY, -1, null, state.outlineColor, null);
         poseStack.popPose();
         super.submit(state, poseStack, submitNodeCollector, camera);
+    }
+
+    private static boolean anyWheelBroken(final WagonRenderState state) {
+        for (final boolean broken : state.wheelBroken) {
+            if (broken) {
+                return true;
+            }
+        }
+        return false;
     }
 }

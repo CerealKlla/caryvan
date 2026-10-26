@@ -39,10 +39,14 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
     private static final Map<String, Identifier> TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + ".png")));
-    /** Health system, 2026-10-26 -- mirrors {@code WagonRenderer}'s own doc exactly (the "wheels damaged" texture variant was dropped the same day in favor of hiding wheel geometry). */
+    /** Health system, 2026-10-26 -- mirrors {@code WagonRenderer}'s own doc exactly. */
     private static final Map<String, Identifier> BROKEN_TEXTURES = WoodType.values()
             .collect(Collectors.toMap(WoodType::name,
                     type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + "_broken.png")));
+    /** Mirrors {@code WagonRenderer}'s own doc exactly. */
+    private static final Map<String, Identifier> WHEELS_DAMAGED_TEXTURES = WoodType.values()
+            .collect(Collectors.toMap(WoodType::name,
+                    type -> Identifier.fromNamespaceAndPath(CaryvanMod.MODID, "textures/entity/carriage_" + type.name() + "_wheels_damaged.png")));
 
     private final CarriageModel model;
 
@@ -112,12 +116,21 @@ public final class CarriageRenderer extends EntityRenderer<CarriageEntity, Carri
             poseStack.mulPose(Axis.ZP.rotationDegrees(BROKEN_TILT_DEGREES));
         }
         this.model.setupAnim(state);
-        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : TEXTURES;
+        final Map<String, Identifier> textureSet = state.broken ? BROKEN_TEXTURES : anyWheelBroken(state) ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
         final Identifier texture = textureSet.getOrDefault(state.woodType, textureSet.get(WoodType.OAK.name()));
         final RenderType renderType = this.model.renderType(texture);
         submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,
                 OverlayTexture.NO_OVERLAY, -1, null, state.outlineColor, null);
         poseStack.popPose();
         super.submit(state, poseStack, submitNodeCollector, camera);
+    }
+
+    private static boolean anyWheelBroken(final CarriageRenderState state) {
+        for (final boolean broken : state.wheelBroken) {
+            if (broken) {
+                return true;
+            }
+        }
+        return false;
     }
 }

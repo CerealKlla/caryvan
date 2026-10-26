@@ -401,17 +401,33 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
 
     // --- Recently Damaged / Passive Repair state machine ----------------------------------------
 
-    /** Called from {@link #tick()} every server tick -- drives the automatic Recently-Damaged-expires-into-Passive-Repair transition and the actual heal-over-time tick, per the approved plan's §4. */
+    /**
+     * Called from {@link #tick()} every server tick -- runs the actual Passive Repair heal-over-time
+     * tick while that window is active. {@code isRecentlyDamaged()} is a pure wall-clock comparison
+     * against {@link #recentlyDamagedUntilMillis} (see its own doc) and needs no per-tick bookkeeping
+     * here to "expire" -- it just naturally reads false once enough time has passed.
+     *
+     * <p>Real live-test bug, 2026-10-26: "the wagon keeps healing itself after a few moments of me
+     * not riding it. Its passive health regen should be 0." Re-verified via real decompiled source
+     * first (per standing discipline) that vanilla has no generic Peaceful-difficulty auto-heal on
+     * {@code LivingEntity}/{@code Mob} that could be firing here -- neither class calls {@code heal()}
+     * anywhere in its own tick logic, confirmed directly, so that specific hypothesis was ruled out,
+     * not assumed. Grepping this entire class (and every sibling entity/menu/item class) for
+     * {@code setHealth(} turned up exactly three real call sites: the direct hit in
+     * {@link #actuallyHurt}, the clamp-DOWN-only move in {@link #recomputeHealthAndMax}, and the
+     * heal-over-time tick just below -- nothing else in this codebase ever raises health. The real
+     * root cause: this method used to auto-START that heal-over-time window itself, the instant
+     * {@link #recentlyDamagedUntilMillis} merely timed out -- with zero player action required at
+     * all (the old doc here even called this out explicitly: "automatic, not gated on the Repair
+     * button at all"), which is exactly the unprompted healing being reported. {@link #repair(int)}
+     * (the one and only other place {@link #passiveRepairUntilMillis} is ever set) is the real,
+     * deliberate trigger -- a direct result of the player clicking Repair (GUI button or
+     * sneak+right-click). Removing the auto-start branch here means the heal-over-time window now
+     * only ever begins as that deliberate action's own reward, never merely from time passing with no
+     * player involvement -- "passive health regen" outside of it is now genuinely always 0.
+     */
     private void tickRepairStateMachine() {
         final long now = System.currentTimeMillis();
-        if (this.recentlyDamagedUntilMillis > 0L && now >= this.recentlyDamagedUntilMillis) {
-            // "Once the 'Recently Damaged' debuff ends, apply the 'Passive Repair' buff for 5
-            // minutes" -- real user spec, automatic, not gated on the Repair button at all.
-            this.recentlyDamagedUntilMillis = 0L;
-            if (this.passiveRepairUntilMillis <= 0L) {
-                this.passiveRepairUntilMillis = now + PASSIVE_REPAIR_MILLIS;
-            }
-        }
         if (this.passiveRepairUntilMillis > 0L) {
             if (now >= this.passiveRepairUntilMillis) {
                 this.passiveRepairUntilMillis = 0L;
