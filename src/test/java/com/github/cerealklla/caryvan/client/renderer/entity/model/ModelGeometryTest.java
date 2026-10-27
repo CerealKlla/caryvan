@@ -66,6 +66,55 @@ final class ModelGeometryTest {
      * Thresholds are deliberately loose (well under this model's own real authored size) -- this
      * exists to catch an actual copy-paste/degenerate-dimension regression, not to pin exact numbers.
      */
+    /**
+     * Real gap this closes, 2026-10-26: a live screenshot showed the cabin completely hollow ("no
+     * walls at all... you can see straight through to the sky") plus a roof-ridge plank floating
+     * disconnected high above everything, despite {@link #carriageCabinPartsAreNonDegenerate()}
+     * passing clean -- that test only checks each part's own SIZE, not where it actually sits. Two
+     * real bugs were hiding behind non-degenerate spans: {@code wallMidLeft}/{@code wallDoorLeft}
+     * were built with {@code WAIST_Y} (the BOTTOM of the mid-wall band) passed as the wall's own TOP
+     * edge, baking the whole mid-wall mostly underground; and {@code chamferPanel}'s own box extended
+     * downward from its pivot instead of upward, so every chamfer/roof panel pointed the wrong way.
+     * This asserts real absolute Y position -- not just span -- specifically checking that the walls
+     * never dip below the floor and that the roof panels actually reach up to meet the ridge cap,
+     * which would have caught both bugs immediately.
+     */
+    @Test
+    void carriageCabinPartsAreInRealPosition() {
+        final ModelPart body = CarriageModel.createLayer().bakeRoot().getChild("root").getChild("body");
+        // wallMidLeft must stay entirely above (more negative than) floor level -- confirmed bug:
+        // the old swapped-constant version baked its own low edge to +0.5625 blocks, BELOW the floor.
+        assertMaxY(body.getChild("wallMidLeft"), "wallMidLeft", 0.05F);
+        assertMaxY(body.getChild("wallDoorLeft"), "wallDoorLeft", 0.05F);
+        // lowerChamferLeft must reach all the way down to real floor level (not stop short underground
+        // or short of it) -- its own high edge should sit at/near Y=0.
+        assertMaxY(body.getChild("lowerChamferLeft"), "lowerChamferLeft", 0.05F);
+        // roofLeft must actually reach up far enough to meet roofRidge -- confirmed bug: the old
+        // downward-extending chamferPanel left roofLeft's own highest point barely past the body's
+        // own roofline, nowhere near the ridge cap 9 units further up.
+        final float roofLeftMinY = minY(body.getChild("roofLeft"));
+        final float roofRidgeMaxY = maxY(body.getChild("roofRidge"));
+        assertTrue(roofLeftMinY <= roofRidgeMaxY + 0.1F,
+                "roofLeft doesn't reach roofRidge: roofLeft top=" + roofLeftMinY + " roofRidge bottom=" + roofRidgeMaxY);
+    }
+
+    private static float minY(final ModelPart part) {
+        final float[] min = {Float.MAX_VALUE};
+        part.getExtentsForGui(new PoseStack(), v -> min[0] = Math.min(min[0], v.y()));
+        return min[0];
+    }
+
+    private static float maxY(final ModelPart part) {
+        final float[] max = {-Float.MAX_VALUE};
+        part.getExtentsForGui(new PoseStack(), v -> max[0] = Math.max(max[0], v.y()));
+        return max[0];
+    }
+
+    private static void assertMaxY(final ModelPart part, final String label, final float maxAllowed) {
+        final float actual = maxY(part);
+        assertTrue(actual <= maxAllowed, label + " extends too far down (y=" + actual + ", wanted <= " + maxAllowed + ")");
+    }
+
     @Test
     void carriageCabinPartsAreNonDegenerate() {
         // Real third rebuild, 2026-10-26: the whole curved-hull/stepped-taper body was scrapped for a

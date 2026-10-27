@@ -257,16 +257,21 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         final float doorLength = 5.0F * LENGTH_SCALE;
         final float doorFrontZ = sideFrontZ;
         final float doorBackZ = doorFrontZ + doorLength;
-        final EasyMeshBuilder wallDoorLeft = wallSegment("wallDoorLeft", -sideX, WAIST_Y, MID_HEIGHT, doorFrontZ, doorBackZ);
-        final EasyMeshBuilder wallDoorRight = wallSegment("wallDoorRight", sideX, WAIST_Y, MID_HEIGHT, doorFrontZ, doorBackZ);
+        // Real bug fix, 2026-10-26 -- live screenshot, "no walls at all... hollow." WAIST_Y is the
+        // BOTTOM of this band (where the lower chamfer tops out), not the top -- confirmed via a real
+        // getExtentsForGui bake check that passing it as wallSegment's own "yTopEdge" put the whole
+        // mid-wall mostly UNDERGROUND (baked y=[-5,+9] raw instead of the real [-19,-5] span). The
+        // real top edge is MID_TOP_Y.
+        final EasyMeshBuilder wallDoorLeft = wallSegment("wallDoorLeft", -sideX, MID_TOP_Y, MID_HEIGHT, doorFrontZ, doorBackZ);
+        final EasyMeshBuilder wallDoorRight = wallSegment("wallDoorRight", sideX, MID_TOP_Y, MID_HEIGHT, doorFrontZ, doorBackZ);
         addDoorDetails(wallDoorLeft, doorLength, MID_HEIGHT);
         addDoorDetails(wallDoorRight, doorLength, MID_HEIGHT);
 
-        final EasyMeshBuilder wallDoorLeftBroken = brokenDoorPanel("wallDoorLeftBroken", -sideX, WAIST_Y, MID_HEIGHT, doorBackZ, doorLength);
-        final EasyMeshBuilder wallDoorRightBroken = brokenDoorPanel("wallDoorRightBroken", sideX, WAIST_Y, MID_HEIGHT, doorBackZ, doorLength);
+        final EasyMeshBuilder wallDoorLeftBroken = brokenDoorPanel("wallDoorLeftBroken", -sideX, MID_TOP_Y, MID_HEIGHT, doorBackZ, doorLength);
+        final EasyMeshBuilder wallDoorRightBroken = brokenDoorPanel("wallDoorRightBroken", sideX, MID_TOP_Y, MID_HEIGHT, doorBackZ, doorLength);
 
-        final EasyMeshBuilder wallMidLeft = wallSegment("wallMidLeft", -sideX, WAIST_Y, MID_HEIGHT, doorBackZ, sideBackZ);
-        final EasyMeshBuilder wallMidRight = wallSegment("wallMidRight", sideX, WAIST_Y, MID_HEIGHT, doorBackZ, sideBackZ);
+        final EasyMeshBuilder wallMidLeft = wallSegment("wallMidLeft", -sideX, MID_TOP_Y, MID_HEIGHT, doorBackZ, sideBackZ);
+        final EasyMeshBuilder wallMidRight = wallSegment("wallMidRight", sideX, MID_TOP_Y, MID_HEIGHT, doorBackZ, sideBackZ);
 
         // Real hexagonal chamfer bands, 2026-10-26 -- see this class's own top-level doc for the real
         // tilt derivation. Lower band tapers the body IN toward the floor; upper band tapers it IN
@@ -414,12 +419,19 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         final double slantLength = Math.sqrt((double) horizontalInset * horizontalInset + (double) verticalRise * verticalRise);
         final double theta = Math.atan2(horizontalInset, verticalRise);
         final EasyMeshBuilder panel = new EasyMeshBuilder(name, 0, 31);
-        panel.addBox(-length / 2.0F, 0.0F, -0.5F, length, (float) slantLength, 1);
+        // Real bug fix, 2026-10-26 -- live screenshot, "no walls... hollow" and "a large detached
+        // plank floating disconnected high above." Confirmed via a real getExtentsForGui bake check
+        // that this box's old local Y span of [0, slantLength] made the panel extend DOWNWARD (toward
+        // the floor) from its own pivot, not upward toward the roof as every call site here actually
+        // needs -- cos(theta) is positive for any real chamfer angle, so the panel's own world Y only
+        // ever grew MORE positive (down) as local Y grew, the opposite of the intended direction. The
+        // box now spans [-slantLength, 0] instead, so its own local Y is negative at the "top" corner,
+        // landing world Y at bottomY - verticalRise there, as intended. The X-tilt sign needed
+        // re-deriving (and re-verifying against real baked output, not hand math alone) to match.
+        panel.addBox(-length / 2.0F, -(float) slantLength, -0.5F, length, (float) slantLength, 1);
         panel.setRotationPoint(sideSign * bottomHalfWidth, bottomY, zCenter);
         panel.yRot = sideSign < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
-        // Left (sideSign<0) tilts positive so world X grows more negative going up; right mirrors it.
-        // See this class's own top-level doc for the real derivation this sign convention comes from.
-        panel.xRot = sideSign < 0.0F ? (float) theta : (float) -theta;
+        panel.xRot = sideSign < 0.0F ? (float) -theta : (float) theta;
         return panel;
     }
 
