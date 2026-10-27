@@ -431,7 +431,13 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         panel.addBox(-length / 2.0F, -(float) slantLength, -0.5F, length, (float) slantLength, 1);
         panel.setRotationPoint(sideSign * bottomHalfWidth, bottomY, zCenter);
         panel.yRot = sideSign < 0.0F ? Mth.PI / 2.0F : -Mth.PI / 2.0F;
-        panel.xRot = sideSign < 0.0F ? (float) -theta : (float) theta;
+        // Real fix, 2026-10-26 -- live screenshot, roof panels crossing/overlapping at inconsistent
+        // angles. Confirmed via a real bake check that the right side's own top corner landed at
+        // world X offset by exactly +TOP_INSET from where the left side's (already-verified-correct)
+        // mirror would put it -- i.e. flipping xRot's sign between sides was wrong; the already-
+        // opposite yRot (+90 for left, -90 for right) handles the needed mirroring on its own, and
+        // BOTH sides need the same xRot sign. Re-verified after removing the sideSign-based flip.
+        panel.xRot = (float) -theta;
         return panel;
     }
 

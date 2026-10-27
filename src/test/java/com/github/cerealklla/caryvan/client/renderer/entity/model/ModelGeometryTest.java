@@ -55,18 +55,6 @@ final class ModelGeometryTest {
     }
 
     /**
-     * Real gap this closes, 2026-10-26: a live user report that the Carriage renders as a flat open
-     * bed with none of the cabin (walls/roof/doors/bench/platform) visible, despite {@link
-     * #carriageModelBakesAndConstructs()} passing clean -- that test only proves parts resolve by
-     * name, it says nothing about whether they're degenerate (zero/near-zero size) or displaced far
-     * from where the rest of the body actually is. This asserts the real transformed world-space
-     * extents of "body" and of each of the new cabin parts specifically, via {@link
-     * ModelPart#getExtentsForGui} (confirmed via its real decompiled bytecode to walk every cube
-     * regardless of {@code visible}/{@code skipDraw} -- i.e. it reports what's genuinely DEFINED).
-     * Thresholds are deliberately loose (well under this model's own real authored size) -- this
-     * exists to catch an actual copy-paste/degenerate-dimension regression, not to pin exact numbers.
-     */
-    /**
      * Real gap this closes, 2026-10-26: a live screenshot showed the cabin completely hollow ("no
      * walls at all... you can see straight through to the sky") plus a roof-ridge plank floating
      * disconnected high above everything, despite {@link #carriageCabinPartsAreNonDegenerate()}
@@ -96,6 +84,49 @@ final class ModelGeometryTest {
         final float roofRidgeMaxY = maxY(body.getChild("roofRidge"));
         assertTrue(roofLeftMinY <= roofRidgeMaxY + 0.1F,
                 "roofLeft doesn't reach roofRidge: roofLeft top=" + roofLeftMinY + " roofRidge bottom=" + roofRidgeMaxY);
+    }
+
+    /**
+     * Real gap this closes, 2026-10-26: a live screenshot showed the roof as several disconnected,
+     * inconsistently-angled slabs crossing each other instead of one coherent two-slope tent, despite
+     * every earlier check passing -- those only checked each SIDE's own size/position in isolation,
+     * never that the left and right slopes actually mirror each other. Real bake check found the
+     * cause: {@code chamferPanel}'s own {@code xRot} sign was flipped per side (to "mirror" the
+     * tilt), but the already-opposite {@code yRot} (+90 left / -90 right) was independently providing
+     * that same mirroring -- compounding the two flips left the right side's own top corner landing a
+     * full {@code TOP_INSET} away from where the (separately-verified-correct) left side's mirror
+     * would put it. This asserts the real baked X positions of a chamfer/roof part and its opposite-
+     * side twin are true mirrors of each other (negatives, within a small tolerance) -- exactly the
+     * check that would have caught this without needing another live screenshot.
+     */
+    @Test
+    void carriageChamferPanelsAreMirrored() {
+        final ModelPart body = CarriageModel.createLayer().bakeRoot().getChild("root").getChild("body");
+        assertMirroredX(body.getChild("lowerChamferLeft"), body.getChild("lowerChamferRight"), "lowerChamfer");
+        assertMirroredX(body.getChild("upperChamferLeftFront"), body.getChild("upperChamferRightFront"), "upperChamferFront");
+        assertMirroredX(body.getChild("roofLeft"), body.getChild("roofRight"), "roof");
+    }
+
+    private static void assertMirroredX(final ModelPart left, final ModelPart right, final String label) {
+        final float leftMin = minX(left);
+        final float leftMax = maxX(left);
+        final float rightMin = minX(right);
+        final float rightMax = maxX(right);
+        final float tolerance = 0.05F;
+        assertTrue(Math.abs(leftMin + rightMax) <= tolerance && Math.abs(leftMax + rightMin) <= tolerance,
+                label + " left/right not mirrored: left x=[" + leftMin + "," + leftMax + "] right x=[" + rightMin + "," + rightMax + "]");
+    }
+
+    private static float minX(final ModelPart part) {
+        final float[] min = {Float.MAX_VALUE};
+        part.getExtentsForGui(new PoseStack(), v -> min[0] = Math.min(min[0], v.x()));
+        return min[0];
+    }
+
+    private static float maxX(final ModelPart part) {
+        final float[] max = {-Float.MAX_VALUE};
+        part.getExtentsForGui(new PoseStack(), v -> max[0] = Math.max(max[0], v.x()));
+        return max[0];
     }
 
     private static float minY(final ModelPart part) {
