@@ -4,13 +4,13 @@
   "group": "caryvan:animal_cart",
   "pattern": [
     "FCF",
-    "PIP",
+    "SIS",
     "W W"
   ],
   "key": {
     "F": "minecraft:birch_fence",
     "C": "minecraft:chest",
-    "P": "minecraft:birch_planks",
+    "S": "minecraft:birch_slab",
     "I": "minecraft:iron_ingot",
     "W": "caryvan:birch_wheels"
   },

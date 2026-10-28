@@ -4,13 +4,13 @@
   "group": "caryvan:animal_cart",
   "pattern": [
     "FCF",
-    "PIP",
+    "SIS",
     "W W"
   ],
   "key": {
     "F": "minecraft:dark_oak_fence",
     "C": "minecraft:chest",
-    "P": "minecraft:dark_oak_planks",
+    "S": "minecraft:dark_oak_slab",
     "I": "minecraft:iron_ingot",
     "W": "caryvan:dark_oak_wheels"
   },

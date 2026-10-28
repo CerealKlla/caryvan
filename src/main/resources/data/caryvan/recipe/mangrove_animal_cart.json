@@ -4,13 +4,13 @@
   "group": "caryvan:animal_cart",
   "pattern": [
     "FCF",
-    "PIP",
+    "SIS",
     "W W"
   ],
   "key": {
     "F": "minecraft:mangrove_fence",
     "C": "minecraft:chest",
-    "P": "minecraft:mangrove_planks",
+    "S": "minecraft:mangrove_slab",
     "I": "minecraft:iron_ingot",
     "W": "caryvan:mangrove_wheels"
   },

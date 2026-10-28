@@ -4,13 +4,13 @@
   "group": "caryvan:animal_cart",
   "pattern": [
     "FCF",
-    "PIP",
+    "SIS",
     "W W"
   ],
   "key": {
     "F": "minecraft:acacia_fence",
     "C": "minecraft:chest",
-    "P": "minecraft:acacia_planks",
+    "S": "minecraft:acacia_slab",
     "I": "minecraft:iron_ingot",
     "W": "caryvan:acacia_wheels"
   },

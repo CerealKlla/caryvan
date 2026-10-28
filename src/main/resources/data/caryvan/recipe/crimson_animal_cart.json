@@ -4,13 +4,13 @@
   "group": "caryvan:animal_cart",
   "pattern": [
     "FCF",
-    "PIP",
+    "SIS",
     "W W"
   ],
   "key": {
     "F": "minecraft:crimson_fence",
     "C": "minecraft:chest",
-    "P": "minecraft:crimson_planks",
+    "S": "minecraft:crimson_slab",
     "I": "minecraft:iron_ingot",
     "W": "caryvan:crimson_wheels"
   },
