@@ -712,9 +712,17 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
                 this.requestPickUpConfirm(player);
                 return InteractionResult.SUCCESS;
             }
-            if (held.getItem() == ModItems.wheelsFor(this.getWoodType())) {
+            // Real user request, 2026-10-28: "I want to be able to take a wagon that was crafted
+            // with 1 kind wheel, and be able to replace the wheels if broken with a different kind
+            // of wheel, and actually see the new style of wheel" -- widened from only accepting
+            // Wheels matching this wagon's own body species to ANY real Wheels item, since per-wheel
+            // species is already tracked (CartWheel#woodType/DATA_WHEEL_WOOD_TYPE[], see Wainwright
+            // Station's own doc) and the renderer now actually reads it (WagonRenderer#submit).
+            final java.util.Optional<net.minecraft.world.level.block.state.properties.WoodType> heldWheelSpecies =
+                    ModItems.woodTypeForWheelsItem(held.getItem());
+            if (heldWheelSpecies.isPresent()) {
                 if (!this.level().isClientSide()) {
-                    this.handleRepairAttempt(player, held);
+                    this.handleRepairAttempt(player, held, heldWheelSpecies.get());
                 }
                 return InteractionResult.SUCCESS;
             }

@@ -615,8 +615,26 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * @return how many wheels were actually un-broken (so the caller knows how many Wheels items were genuinely consumed).
      */
     public int repair(final int wheelsAvailable) {
+        return repair(wheelsAvailable, null);
+    }
+
+    /**
+     * Same as the 1-arg overload, but also re-colors whichever wheel(s) this call fixes to {@code
+     * newSpecies} (null = leave species untouched, the original behavior) -- real user request,
+     * 2026-10-28: "replace the wheels if broken with a different kind of wheel, and actually see the
+     * new style of wheel." {@link #applyBrokenWheelCount()}'s own fixed "lowest N indices are
+     * broken" ordering means the wheel(s) that transition from broken to fixed by THIS call are
+     * always the highest indices within the previously-broken range -- {@code
+     * [brokenWheelCount - toFix, brokenWheelCount)}, computed before decrementing.
+     */
+    public int repair(final int wheelsAvailable, final WoodType newSpecies) {
         final int toFix = Math.min(wheelsAvailable, this.brokenWheelCount);
         if (toFix > 0) {
+            if (newSpecies != null) {
+                for (int i = this.brokenWheelCount - toFix; i < this.brokenWheelCount; i++) {
+                    setWheelWoodType(i, newSpecies);
+                }
+            }
             this.brokenWheelCount -= toFix;
             applyBrokenWheelCount();
         }
@@ -828,6 +846,18 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
      * one wheel is broken; consumes up to {@code wheelsHeld} from the held stack.
      */
     public void handleRepairAttempt(final net.minecraft.world.entity.player.Player player, final net.minecraft.world.item.ItemStack heldWheels) {
+        handleRepairAttempt(player, heldWheels, null);
+    }
+
+    /**
+     * Same as the 2-arg overload, but also re-colors whichever wheel(s) this call actually fixes to
+     * {@code newSpecies} -- real user request, 2026-10-28 (see {@link WagonEntity}'s own call site
+     * doc for the full quote). {@code newSpecies} is {@code null} for the plain overload above
+     * (Carriage's own call site, which has no per-part wood-mixing concept at all -- leaving a
+     * repaired wheel's species untouched there, same as before this change).
+     */
+    public void handleRepairAttempt(final net.minecraft.world.entity.player.Player player, final net.minecraft.world.item.ItemStack heldWheels,
+            final WoodType newSpecies) {
         if (this.isRecentlyDamaged()) {
             player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
                     "This cart was recently damaged and can't be repaired yet."));
@@ -838,7 +868,7 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
                     "This cart's wheels are already in good repair."));
             return;
         }
-        final int fixed = this.repair(heldWheels.getCount());
+        final int fixed = this.repair(heldWheels.getCount(), newSpecies);
         if (fixed > 0) {
             heldWheels.shrink(fixed);
             player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(

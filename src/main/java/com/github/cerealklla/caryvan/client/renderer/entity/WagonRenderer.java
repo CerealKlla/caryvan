@@ -95,6 +95,7 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
         for (int i = 0; i < state.wheelRotation.length; i++) {
             state.wheelRotation[i] = (float) entity.getWheelRotation(i);
             state.wheelBroken[i] = entity.isWheelBroken(i);
+            state.wheelWoodType[i] = entity.getWheelWoodType(i).name();
         }
         state.woodType = entity.getWoodType().name();
         state.broken = entity.isBroken();
@@ -142,6 +143,24 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
     // so the two can never drift apart.
     private static final float BROKEN_TILT_DEGREES = com.github.cerealklla.caryvan.client.renderer.entity.model.WagonModel.BROKEN_TILT_DEGREES;
 
+    /**
+     * Real per-part wood-species texture split, 2026-10-28 -- explicit user request: "I want to be
+     * able to take a wagon that was crafted with 1 kind wheel, and be able to replace the wheels if
+     * broken with a different kind of wheel, and actually see the new style of wheel." Previously a
+     * single {@code submitModel()} call bound ONE texture for the whole model (confirmed before this
+     * change -- the body/wheel split this session's own design-document.md section had deliberately
+     * flagged as needing "real new texture-authoring work" to ever happen). Turns out no new art was
+     * needed at all: every wood species already has its own full {@code wagon_<wood>.png} sheet with
+     * the SAME UV layout (same model, same {@code texOffs} calls, just different pixels per species)
+     * -- so binding the body's own sheet for body parts and each wheel's own (possibly different)
+     * sheet for that wheel's parts, via separate {@link
+     * net.minecraft.client.renderer.OrderedSubmitNodeCollector#submitModelPart} calls instead of one
+     * {@code submitModel()} call, recolors each part correctly using assets that already existed.
+     * {@code WagonModel#bodyPart}/{@code #activeWheelPart} (root's own two wrapper levels both have a
+     * zero pivot/rotation, confirmed directly from {@code WagonModel#createLayer}, so submitting a
+     * part directly instead of walking the whole tree from root changes nothing visually) are the
+     * other half of this change.
+     */
     @Override
     public void submit(final WagonRenderState state, final PoseStack poseStack, final SubmitNodeCollector submitNodeCollector, final CameraRenderState camera) {
         poseStack.pushPose();
@@ -151,21 +170,32 @@ public final class WagonRenderer extends EntityRenderer<WagonEntity, WagonRender
             poseStack.mulPose(Axis.ZP.rotationDegrees(BROKEN_TILT_DEGREES));
         }
         this.model.setupAnim(state);
-        final Map<String, Identifier> textureSet = anyWheelBroken(state) ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
-        final Identifier texture = textureSet.getOrDefault(state.woodType, textureSet.get(WoodType.OAK.name()));
-        final RenderType renderType = this.model.renderType(texture);
-        submitNodeCollector.submitModel(this.model, state, poseStack, renderType, state.lightCoords,
-                OverlayTexture.NO_OVERLAY, -1, null, state.outlineColor, null);
+
+        final RenderType bodyRenderType = this.model.renderType(textureFor(TEXTURES, state.woodType));
+        submitNodeCollector.submitModelPart(this.model.bodyPart(), poseStack, bodyRenderType, state.lightCoords, OverlayTexture.NO_OVERLAY, null);
+
+        for (int i = 0; i < state.wheelWoodType.length; i++) {
+            final net.minecraft.client.model.geom.ModelPart wheelPart = this.model.activeWheelPart(i);
+            if (wheelPart == null) {
+                continue; // Fully Broken, raised side -- detached outright, nothing to submit (matches the old whole-model submit's own implicit behavior there).
+            }
+            final Map<String, Identifier> textureSet = state.wheelBroken[i] ? WHEELS_DAMAGED_TEXTURES : TEXTURES;
+            final RenderType wheelRenderType = this.model.renderType(textureFor(textureSet, state.wheelWoodType[i]));
+            submitNodeCollector.submitModelPart(wheelPart, poseStack, wheelRenderType, state.lightCoords, OverlayTexture.NO_OVERLAY, null);
+        }
+
+        if (state.broken) {
+            // Fallen-wheel debris -- kept on the body's own species/texture rather than a specific
+            // wheel's, since a single debris piece doesn't correspond to one tracked wheel index.
+            submitNodeCollector.submitModelPart(this.model.fallenWheelPart(true), poseStack, bodyRenderType, state.lightCoords, OverlayTexture.NO_OVERLAY, null);
+            submitNodeCollector.submitModelPart(this.model.fallenWheelPart(false), poseStack, bodyRenderType, state.lightCoords, OverlayTexture.NO_OVERLAY, null);
+        }
+
         poseStack.popPose();
         super.submit(state, poseStack, submitNodeCollector, camera);
     }
 
-    private static boolean anyWheelBroken(final WagonRenderState state) {
-        for (final boolean broken : state.wheelBroken) {
-            if (broken) {
-                return true;
-            }
-        }
-        return false;
+    private static Identifier textureFor(final Map<String, Identifier> textureSet, final String woodType) {
+        return textureSet.getOrDefault(woodType, textureSet.get(WoodType.OAK.name()));
     }
 }

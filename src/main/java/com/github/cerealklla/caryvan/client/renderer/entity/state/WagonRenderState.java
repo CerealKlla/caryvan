@@ -24,4 +24,13 @@ public final class WagonRenderState extends EntityRenderState {
      * index order as {@link #wheelRotation}.
      */
     public final boolean[] wheelBroken = new boolean[4];
+    /**
+     * Real per-part wood-species texture split, 2026-10-28 (explicit user request: "replace the
+     * wheels if broken with a different kind of wheel, and actually see the new style of wheel") --
+     * each wheel's own currently-bound species, same index order as {@link #wheelRotation}. Falls
+     * back to {@link #woodType} (the body's own species) for a wheel that's never been individually
+     * repaired with a different one, same as {@code AbstractDamageableDrawnEntity#getWheelWoodType}'s
+     * own default.
+     */
+    public final String[] wheelWoodType = new String[4];
 }

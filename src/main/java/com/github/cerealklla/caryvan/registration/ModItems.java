@@ -147,6 +147,21 @@ public final class ModItems {
         return WHEELS.get(woodType).get();
     }
 
+    /**
+     * Reverse of {@link #wheelsFor} -- added 2026-10-28 for Wagon Repair accepting a different
+     * species of Wheels than the wagon's own body (real user request: "replace the wheels if broken
+     * with a different kind of wheel, and actually see the new style of wheel"). Empty if {@code
+     * item} isn't any real Wheels item at all.
+     */
+    public static java.util.Optional<WoodType> woodTypeForWheelsItem(final Item item) {
+        for (final var entry : WHEELS.entrySet()) {
+            if (entry.getValue().get() == item) {
+                return java.util.Optional.of(entry.getKey());
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
     public static Item doorFor(final WoodType woodType) {
         return DOORS.get(woodType).get();
     }

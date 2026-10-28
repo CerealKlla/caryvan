@@ -125,6 +125,11 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
     private final ModelPart rightWheelBackBroken;
     private final ModelPart fallenWheelFront;
     private final ModelPart fallenWheelBack;
+    private final ModelPart body;
+
+    /** Normal/Broken pairs for each of the 4 wheel positions, in the same 0=leftFront/1=rightFront/2=leftBack/3=rightBack order {@link #setupAnim}'s own {@code state.wheelRotation}/{@code wheelBroken} arrays use -- see {@link #activeWheelPart(int)}'s own doc. */
+    private final ModelPart[] wheelNormalByIndex;
+    private final ModelPart[] wheelBrokenByIndex;
 
     public WagonModel(final ModelPart root) {
         super(root, RenderTypes::entityCutout);
@@ -141,6 +146,35 @@ public final class WagonModel extends EntityModel<WagonRenderState> {
         this.rightWheelBackBroken = parts.getChild("rightWheelBackBroken");
         this.fallenWheelFront = parts.getChild("fallenWheelFront");
         this.fallenWheelBack = parts.getChild("fallenWheelBack");
+        this.body = parts.getChild("body");
+        this.wheelNormalByIndex = new ModelPart[] {leftWheelFrontNormal, rightWheelFrontNormal, leftWheelBackNormal, rightWheelBackNormal};
+        this.wheelBrokenByIndex = new ModelPart[] {leftWheelFrontBroken, rightWheelFrontBroken, leftWheelBackBroken, rightWheelBackBroken};
+    }
+
+    /** The body-only geometry (bed, axles, posts, rails, bench) -- real per-part wood-species texture split, 2026-10-28, see {@link com.github.cerealklla.caryvan.client.renderer.entity.WagonRenderer#submit}'s own doc. */
+    public ModelPart bodyPart() {
+        return body;
+    }
+
+    /**
+     * Whichever of wheel position {@code index}'s Normal/Broken variants {@link #setupAnim} made
+     * visible this frame (0=leftFront/1=rightFront/2=leftBack/3=rightBack, matching {@code
+     * WagonRenderState.wheelRotation}/{@code wheelBroken}'s own indexing) -- {@code null} only in the
+     * fully-Broken, raised-side case where BOTH variants are hidden (see {@link #applyWheelPair}'s
+     * own doc). Real per-part wood-species texture split, 2026-10-28.
+     */
+    public ModelPart activeWheelPart(final int index) {
+        final ModelPart normal = wheelNormalByIndex[index];
+        if (normal.visible) {
+            return normal;
+        }
+        final ModelPart broken = wheelBrokenByIndex[index];
+        return broken.visible ? broken : null;
+    }
+
+    /** The two fully-Broken "fallen wheel" debris pieces -- always keyed the SAME index order as {@link #activeWheelPart} (front, back), only ever visible while fully Broken. */
+    public ModelPart fallenWheelPart(final boolean front) {
+        return front ? fallenWheelFront : fallenWheelBack;
     }
 
     /** See this class's own doc for the full derivation/reasoning behind every piece of this method. */
