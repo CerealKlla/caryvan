@@ -185,7 +185,11 @@ public class WainwrightStationMenu extends AbstractContainerMenu {
      * user, 2026-10-28 -- Hand/Animal split into two independent parts/costs the same day, once the
      * user confirmed (after a real geometry/mechanics comparison) that Hand Cart and Animal Cart are
      * genuinely distinct entities, not redundant -- see {@code ModItems}' own doc. Wagon Body's cost
-     * also gained 4 iron ingots on top of its already-set figure the same message. Extracted into
+     * also gained 4 iron ingots on top of its already-set figure the same message. Hand Cart Body/
+     * Animal Cart Body each gained their own 1 Chest, 2026-10-28 (real live-test report: "neither
+     * cart requires a chest, which both are supposed to require 1") -- the original combined Cart
+     * Body recipe (before the Hand/Animal split, same day) genuinely did include 1 Chest, but it got
+     * silently dropped when the user's follow-up split-cost spec didn't re-state it. Extracted into
      * its own static method (not just inlined in {@link #craftPart}) so {@code
      * client.WainwrightStationScreen} can show the real cost/what's-missing instead of a blind
      * "Craft" button -- real user report, 2026-10-28, after the UI overlap fix shipped: "it needs to
@@ -206,8 +210,10 @@ public class WainwrightStationMenu extends AbstractContainerMenu {
             case PART_HAND_CART_BODY -> {
                 cost.put(net.minecraft.world.item.Items.STICK, 4);
                 cost.put(planks, 6);
+                cost.put(net.minecraft.world.item.Items.CHEST, 1);
             }
             case PART_ANIMAL_CART_BODY -> {
+                cost.put(net.minecraft.world.item.Items.CHEST, 1);
                 cost.put(net.minecraft.world.item.Items.STICK, 2);
                 cost.put(net.minecraft.world.item.Items.IRON_INGOT, 2);
                 cost.put(slab, 9);

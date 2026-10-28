@@ -1,6 +1,3 @@
 {
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "minecraft:block/mangrove_planks"
-  }
+  "parent": "minecraft:block/mangrove_planks"
 }

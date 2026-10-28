@@ -42,7 +42,10 @@ public final class WainwrightPreviewStorage {
     // now." Folding a version into the key makes a renderer change naturally orphan every old
     // server-side file AND force every client to re-request+re-cache under a new key, with no
     // server or client cache to manually clear.
-    private static final String GEOMETRY_VERSION = "v2";
+    // v3, 2026-10-28: the v2 geometry port itself rendered upside down (missing the standard
+    // vanilla entity-model orientation correction, see CaryvanImager's own decisions.md) -- bumped
+    // again so clients don't keep showing the now-fixed-server-side-but-still-cached-wrong v2 images.
+    private static final String GEOMETRY_VERSION = "v3";
 
     public static String keyFor(final String type, final String bodySpecies, final String wheelSpecies) {
         return GEOMETRY_VERSION + "_" + type + "_" + bodySpecies + "_" + wheelSpecies;

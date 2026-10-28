@@ -346,11 +346,21 @@ public class WainwrightStationScreen extends AbstractContainerScreen<WainwrightS
             }
             drawSpeciesGrid(graphics, x + CONTENT_X, y + PART_GRID_Y, carriedSpecies(WainwrightStationScreen::planksItem),
                     species -> new ItemStack(planksItem(species)), selectedSpecies, mouseX, mouseY);
-            if (selectedPart >= 0 && selectedSpecies >= 0) {
+            if (selectedPart >= 0) {
+                // Real live-test report, 2026-10-28: "I also have no idea what materials are needed
+                // to create things" -- this used to require BOTH a selected part AND a selected
+                // species, but the species grid is only ever populated with carried species, so a
+                // player with none of the relevant raw material yet (e.g. a brand new player with no
+                // wood at all) could never see a cost at all. Now shows as soon as a part is picked,
+                // falling back to Oak as a representative example species if none is actually
+                // selected/carried yet -- real info beats no info.
+                final boolean realSpecies = selectedSpecies >= 0;
+                final WoodType costSpecies = realSpecies ? allSpecies().get(selectedSpecies) : WoodType.OAK;
                 final int costX = x + CONTENT_X + GRID_COLUMNS * ICON_CELL + 20;
-                graphics.text(font, Component.literal("Cost:"), costX, y + PART_GRID_Y, LABEL_TEXT_COLOR, false);
+                final String costLabel = realSpecies ? "Cost:" : "Cost (Oak shown as example):";
+                graphics.text(font, Component.literal(costLabel), costX, y + PART_GRID_Y, LABEL_TEXT_COLOR, false);
                 drawCostList(graphics, costX, y + PART_GRID_Y + COST_LINE_HEIGHT + 2,
-                        WainwrightStationMenu.costForPart(selectedPart, allSpecies().get(selectedSpecies)));
+                        WainwrightStationMenu.costForPart(selectedPart, costSpecies));
             }
         } else {
             int cursor = x + CONTENT_X;
@@ -370,24 +380,33 @@ public class WainwrightStationScreen extends AbstractContainerScreen<WainwrightS
                 drawSpeciesGrid(graphics, x + CONTENT_X + WHEEL_GRID_X_OFFSET, y + SPECIES_GRID_Y, carriedSpecies(ModItems::wheelsFor),
                         species -> new ItemStack(ModItems.wheelsFor(species)), selectedWheelSpecies, mouseX, mouseY);
 
-                if (selectedBodySpecies >= 0 && selectedWheelSpecies >= 0) {
-                    final WoodType body = allSpecies().get(selectedBodySpecies);
-                    final WoodType wheel = allSpecies().get(selectedWheelSpecies);
-                    final int previewY = y + SPECIES_GRID_Y + GRID_MAX_HEIGHT + 6;
-                    // Summary/cost text on the left, preview image on the right -- explicit user
-                    // request 2026-10-28, swapped from the original image-left/text-right layout.
-                    final int infoX = x + CONTENT_X;
+                // Same "show real info instead of none at all" fix as the Parts tab, 2026-10-28 --
+                // was gated behind BOTH species actually being selected (only ever possible once the
+                // player already carries a real Body item and real Wheels), so a player with neither
+                // yet could never see what assembling a cart would even cost. The preview IMAGE still
+                // only renders once both are real choices (it's a genuine combo to visualize, not a
+                // reference table, and requesting a render for an arbitrary fallback would be noise).
+                final boolean bothSelected = selectedBodySpecies >= 0 && selectedWheelSpecies >= 0;
+                final WoodType body = selectedBodySpecies >= 0 ? allSpecies().get(selectedBodySpecies) : WoodType.OAK;
+                final WoodType wheel = selectedWheelSpecies >= 0 ? allSpecies().get(selectedWheelSpecies) : WoodType.OAK;
+                final int previewY = y + SPECIES_GRID_Y + GRID_MAX_HEIGHT + 6;
+                // Summary/cost text on the left, preview image on the right -- explicit user
+                // request 2026-10-28, swapped from the original image-left/text-right layout.
+                final int infoX = x + CONTENT_X;
+                if (bothSelected) {
                     drawPreview(graphics, infoX + INFO_COLUMN_WIDTH, previewY, body, wheel);
-
-                    final String summary = TYPE_LABELS[selectedType] + ": " + displayName(body) + " body / " + displayName(wheel) + " wheels";
-                    graphics.text(font, Component.literal(summary), infoX, previewY, LABEL_TEXT_COLOR, false);
-
-                    final java.util.Map<Item, Integer> assembleCost = new java.util.LinkedHashMap<>();
-                    assembleCost.put(bodyItemFor(selectedType, body), 1);
-                    assembleCost.put(ModItems.wheelsFor(wheel), WainwrightStationMenu.wheelCountFor(selectedType));
-                    graphics.text(font, Component.literal("Cost:"), infoX, previewY + 12, LABEL_TEXT_COLOR, false);
-                    drawCostList(graphics, infoX, previewY + 12 + COST_LINE_HEIGHT + 2, assembleCost);
                 }
+
+                final String summary = bothSelected
+                        ? TYPE_LABELS[selectedType] + ": " + displayName(body) + " body / " + displayName(wheel) + " wheels"
+                        : TYPE_LABELS[selectedType] + " cost (Oak shown as example):";
+                graphics.text(font, Component.literal(summary), infoX, previewY, LABEL_TEXT_COLOR, false);
+
+                final java.util.Map<Item, Integer> assembleCost = new java.util.LinkedHashMap<>();
+                assembleCost.put(bodyItemFor(selectedType, body), 1);
+                assembleCost.put(ModItems.wheelsFor(wheel), WainwrightStationMenu.wheelCountFor(selectedType));
+                graphics.text(font, Component.literal("Cost:"), infoX, previewY + 12, LABEL_TEXT_COLOR, false);
+                drawCostList(graphics, infoX, previewY + 12 + COST_LINE_HEIGHT + 2, assembleCost);
             } else {
                 graphics.text(font, Component.literal("Pick a type above."), x + CONTENT_X, y + SPECIES_GRID_Y, LABEL_TEXT_COLOR, false);
             }
