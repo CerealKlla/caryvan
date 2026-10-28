@@ -1,14 +1,28 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "caryvan:pale_oak_wheels",
-    "caryvan:pale_oak_wheels",
-    "minecraft:pale_oak_planks",
-    "minecraft:pale_oak_planks",
-    "minecraft:pale_oak_planks",
-    "minecraft:iron_ingot"
+  "pattern": [
+    "FCF",
+    "PIP",
+    "W W"
   ],
+  "key": {
+    "F": {
+      "item": "minecraft:pale_oak_fence"
+    },
+    "C": {
+      "item": "minecraft:chest"
+    },
+    "P": {
+      "item": "minecraft:pale_oak_planks"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "W": {
+      "item": "caryvan:pale_oak_wheels"
+    }
+  },
   "result": {
     "id": "caryvan:pale_oak_animal_cart"
   }

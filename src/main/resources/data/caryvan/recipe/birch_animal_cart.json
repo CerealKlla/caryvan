@@ -1,14 +1,28 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "caryvan:birch_wheels",
-    "caryvan:birch_wheels",
-    "minecraft:birch_planks",
-    "minecraft:birch_planks",
-    "minecraft:birch_planks",
-    "minecraft:iron_ingot"
+  "pattern": [
+    "FCF",
+    "PIP",
+    "W W"
   ],
+  "key": {
+    "F": {
+      "item": "minecraft:birch_fence"
+    },
+    "C": {
+      "item": "minecraft:chest"
+    },
+    "P": {
+      "item": "minecraft:birch_planks"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "W": {
+      "item": "caryvan:birch_wheels"
+    }
+  },
   "result": {
     "id": "caryvan:birch_animal_cart"
   }

@@ -273,6 +273,23 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         }
     }
 
+    /**
+     * Real bug fix, 2026-10-28: {@code LivingEntity#kill(ServerLevel)} routes through {@code
+     * hurtServer}/this class's own custom damage pipeline (confirmed against the real decompiled
+     * source), which -- by design, for ordinary combat death -- never actually removes a Broken
+     * cart (see {@link #die}'s own doc: persisting until Pick Up is the whole point). That's
+     * correct for combat, but an explicit admin {@code /kill} is a deliberate "remove this entity,
+     * no questions asked" command and should always work regardless of this cart's own Broken-
+     * state persistence rule -- confirmed live: a genuinely orphaned pre-ownership-system Wagon (no
+     * {@code OwnerId} at all, so Pick Up silently refused every player forever, see {@link
+     * #requestPickUpConfirm}'s own doc) survived three separate real {@code /kill} attempts with
+     * zero effect.
+     */
+    @Override
+    public void kill(final ServerLevel level) {
+        this.discard();
+    }
+
     /** Whether this cart is currently in the Broken (0 HP) state -- model-swap/companion-defense-gating hook for concrete subclasses. */
     public boolean isBroken() {
         return this.getHealth() <= 0.0F;
@@ -339,8 +356,12 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         // rejected totalDamageTaken model.
         final int healthImplied = computeBrokenWheelCount();
         if (healthImplied > this.brokenWheelCount) {
+            final int newlyBroken = healthImplied - this.brokenWheelCount;
             this.brokenWheelCount = healthImplied;
             applyBrokenWheelCount();
+            // Real user request, 2026-10-28: a wheel actually breaking should leave something behind
+            // to repair it with later, not just a visual/stat change.
+            onWheelBroken(newlyBroken);
         }
         // Carriage redesign Phase 3, 2026-10-26 -- hook for a concrete subclass to ratchet its own
         // additional, non-wheel broken-part state (Doors) the same way, off the same real hit. No-op
@@ -351,6 +372,14 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
 
     /** Hook for a concrete subclass to react to a real hit landing -- no-op by default. Called after {@link #brokenWheelCount}'s own ratchet, from within {@link #actuallyHurt}. */
     protected void onDamageTaken() {
+    }
+
+    /**
+     * Hook for a concrete subclass to actually deposit a Broken Wheel item when {@code count}
+     * wheels just newly broke -- no-op by default (this base class has no cargo of its own; see
+     * {@link AbstractDamageableDrawnInventoryEntity}'s own override, the only real consumer).
+     */
+    protected void onWheelBroken(final int count) {
     }
 
     /** Syncs {@link #brokenWheelCount} onto the real {@link CartWheel} objects (renderer reads this per-wheel) and the synced bitmask (client-visible). */
@@ -611,7 +640,16 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     }
 
     public void requestPickUpConfirm(final net.minecraft.world.entity.player.Player player) {
-        if (!this.isOwner(player) || !(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+        if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            return;
+        }
+        // Real bug fix, 2026-10-28: this used to silently return here with zero feedback, which is
+        // exactly why a genuinely owner-less cart (pre-ownership-system, no OwnerId persisted at
+        // all -- #isOwner false for literally every player) looked like Pick Up was simply broken,
+        // with nothing pointing at the real cause.
+        if (!this.isOwner(player)) {
+            serverPlayer.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                    "Only " + (this.ownerName != null ? this.ownerName : "the owner") + " can pick up this cart."));
             return;
         }
         if (!this.canPickUp()) {

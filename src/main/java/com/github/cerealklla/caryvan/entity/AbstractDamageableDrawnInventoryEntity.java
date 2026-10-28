@@ -221,6 +221,42 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
     }
 
     /**
+     * Real user request, 2026-10-28: "when a wagon's wheel breaks a broken wheel item needs to be
+     * added to the wagon's inventory." Deposits {@code count} {@code caryvan:broken_wheel} (a plain,
+     * non-wood-specific junk item -- NOT the same item {@link #handleRepairFromCargo} consumes to fix
+     * a wheel, which is the per-wood-species {@code Wheels} crafting item) into this cart's own
+     * cargo, stacking into any existing matching stack first, then the first empty slot; whatever
+     * doesn't fit scatters on the ground, same overflow convention every other cargo-deposit path in
+     * this suite already uses (e.g. Yconomics' {@code LootBagListener}).
+     */
+    @Override
+    protected void onWheelBroken(final int count) {
+        final net.minecraft.world.item.Item brokenWheelItem = com.github.cerealklla.caryvan.registration.ModItems.BROKEN_WHEEL.get();
+        int remaining = count;
+        for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+            final ItemStack stack = this.getItem(i);
+            if (stack.getItem() == brokenWheelItem && stack.getCount() < stack.getMaxStackSize()) {
+                final int room = stack.getMaxStackSize() - stack.getCount();
+                final int add = Math.min(room, remaining);
+                stack.grow(add);
+                remaining -= add;
+            }
+        }
+        for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+            if (this.getItem(i).isEmpty()) {
+                final int add = Math.min(new ItemStack(brokenWheelItem).getMaxStackSize(), remaining);
+                this.setItem(i, new ItemStack(brokenWheelItem, add));
+                remaining -= add;
+            }
+        }
+        if (remaining > 0 && this.level() instanceof ServerLevel serverLevel) {
+            net.minecraft.world.entity.item.ItemEntity itemEntity = new net.minecraft.world.entity.item.ItemEntity(
+                    serverLevel, this.getX(), this.getY(), this.getZ(), new ItemStack(brokenWheelItem, remaining));
+            serverLevel.addFreshEntity(itemEntity);
+        }
+    }
+
+    /**
      * Spills real cargo at Pick Up -- through a real Yconomics Loot Bag
      * ({@code bridge.YconomicsLootBagBridge#depositOrScatter}, see its own doc) when Yconomics is
      * loaded, falling back to plain vanilla item drops otherwise (a Yconomics-less server has no

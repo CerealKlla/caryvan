@@ -1,14 +1,28 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "caryvan:acacia_wheels",
-    "caryvan:acacia_wheels",
-    "minecraft:acacia_planks",
-    "minecraft:acacia_planks",
-    "minecraft:acacia_planks",
-    "minecraft:iron_ingot"
+  "pattern": [
+    "FCF",
+    "PIP",
+    "W W"
   ],
+  "key": {
+    "F": {
+      "item": "minecraft:acacia_fence"
+    },
+    "C": {
+      "item": "minecraft:chest"
+    },
+    "P": {
+      "item": "minecraft:acacia_planks"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "W": {
+      "item": "caryvan:acacia_wheels"
+    }
+  },
   "result": {
     "id": "caryvan:acacia_animal_cart"
   }

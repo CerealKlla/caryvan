@@ -1,10 +1,22 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "minecraft:jungle_planks",
-    "minecraft:iron_ingot"
+  "pattern": [
+    "PSP",
+    "SIS",
+    "PSP"
   ],
+  "key": {
+    "P": {
+      "item": "minecraft:jungle_planks"
+    },
+    "S": {
+      "item": "minecraft:stick"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
   "result": {
     "id": "caryvan:jungle_wheels"
   }
