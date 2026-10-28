@@ -4,6 +4,7 @@ import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.menu.AnimalCartMenu;
 import com.github.cerealklla.caryvan.menu.CarriageMenu;
 import com.github.cerealklla.caryvan.menu.WagonMenu;
+import com.github.cerealklla.caryvan.wainwright.WainwrightStationMenu;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.inventory.MenuType;
@@ -31,4 +32,17 @@ public final class ModMenus {
     public static final DeferredHolder<MenuType<?>, MenuType<CarriageMenu>> CARRIAGE = MENU_TYPES.register(
             "carriage",
             () -> IMenuTypeExtension.create((windowId, inventory, extraData) -> new CarriageMenu(null, windowId, inventory)));
+
+    // Wainwright Station -- no extra data needed, see WainwrightStationBlockEntity's own doc.
+    // inventoryY is computed from the client's real window height (2026-10-28 "shrink to fit" fix,
+    // see WainwrightStationMenu's own doc) -- same pattern Lyfe's CraftingStructureMenu already uses,
+    // safe to read the client's real window here since this factory lambda is only ever invoked
+    // client-side.
+    public static final DeferredHolder<MenuType<?>, MenuType<WainwrightStationMenu>> WAINWRIGHT_STATION = MENU_TYPES.register(
+            "wainwright_station",
+            () -> IMenuTypeExtension.create((windowId, inventory, extraData) -> {
+                final int windowHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getGuiScaledHeight();
+                final int inventoryY = WainwrightStationMenu.computeInventoryY(windowHeight);
+                return new WainwrightStationMenu(null, windowId, inventory, inventoryY);
+            }));
 }

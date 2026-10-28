@@ -1,5 +1,6 @@
 package com.github.cerealklla.caryvan.item;
 
+import com.github.cerealklla.caryvan.registration.ModDataComponents;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 
 import net.minecraft.sounds.SoundEvents;
@@ -74,7 +75,19 @@ public final class AnimalCartItem extends Item {
             return InteractionResult.FAIL;
         }
 
-        ((com.github.cerealklla.caryvan.entity.AbstractDrawnEntity) cart).setWoodType(this.woodType);
+        final var drawn = (com.github.cerealklla.caryvan.entity.AbstractDrawnEntity) cart;
+        drawn.setWoodType(this.woodType);
+        // Wainwright Station wood-species mixing, 2026-10-28 -- see WagonItem's identical block for
+        // the full doc; an Animal Cart has 2 wheels instead of 4.
+        final WoodType wheelWoodType = stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get()) == null
+                ? this.woodType
+                : WoodType.values()
+                        .filter(type -> type.name().equals(stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get())))
+                        .findFirst()
+                        .orElse(this.woodType);
+        for (int i = 0; i < 2; i++) {
+            drawn.setWheelWoodType(i, wheelWoodType);
+        }
         level.addFreshEntity(cart);
         level.playSound(null, cart.getX(), cart.getY(), cart.getZ(), SoundEvents.WOOD_PLACE, SoundSource.BLOCKS, 0.75F, 0.8F);
         if (!player.getAbilities().instabuild) {

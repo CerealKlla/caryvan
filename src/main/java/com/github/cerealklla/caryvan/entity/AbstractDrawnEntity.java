@@ -81,6 +81,13 @@ public abstract class AbstractDrawnEntity extends VehicleEntity implements com.g
     // String round-trips through WoodType.values() filtering trivially).
     private static final EntityDataAccessor<String> DATA_WOOD_TYPE =
             SynchedEntityData.defineId(AbstractDrawnEntity.class, EntityDataSerializers.STRING);
+    // Wainwright Station wood-species mixing, 2026-10-28 -- one synced field per wheel index,
+    // exact copy of DATA_WOOD_TYPE's own shape, same as AbstractDamageableDrawnEntity's identical
+    // addition. Hand Cart/Animal Cart both have exactly 2 wheels (see the constructor below).
+    private static final EntityDataAccessor<String>[] DATA_WHEEL_WOOD_TYPE = new EntityDataAccessor[] {
+            SynchedEntityData.defineId(AbstractDrawnEntity.class, EntityDataSerializers.STRING),
+            SynchedEntityData.defineId(AbstractDrawnEntity.class, EntityDataSerializers.STRING),
+    };
 
     protected List<CartWheel> wheels;
     private Entity pulling;
@@ -428,6 +435,19 @@ public abstract class AbstractDrawnEntity extends VehicleEntity implements com.g
                 .orElse(WoodType.OAK);
     }
 
+    /** Wainwright Station wood-species mixing, 2026-10-28 -- see {@code AbstractDamageableDrawnEntity#getWheelWoodType}'s identical doc. */
+    public WoodType getWheelWoodType(final int wheel) {
+        return WoodType.values()
+                .filter(type -> type.name().equals(this.entityData.get(DATA_WHEEL_WOOD_TYPE[wheel])))
+                .findFirst()
+                .orElse(WoodType.OAK);
+    }
+
+    public void setWheelWoodType(final int wheel, final WoodType woodType) {
+        this.entityData.set(DATA_WHEEL_WOOD_TYPE[wheel], woodType.name());
+        this.wheels.get(wheel).setWoodType(woodType);
+    }
+
     public void setWoodType(final WoodType woodType) {
         this.entityData.set(DATA_WOOD_TYPE, woodType.name());
     }
@@ -493,6 +513,9 @@ public abstract class AbstractDrawnEntity extends VehicleEntity implements com.g
     protected void defineSynchedData(final SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(DATA_WOOD_TYPE, WoodType.OAK.name());
+        for (final EntityDataAccessor<String> accessor : DATA_WHEEL_WOOD_TYPE) {
+            builder.define(accessor, WoodType.OAK.name());
+        }
     }
 
     // No super call -- Entity declares both of these abstract, and nothing between it and this
@@ -504,12 +527,22 @@ public abstract class AbstractDrawnEntity extends VehicleEntity implements com.g
     protected void readAdditionalSaveData(final ValueInput input) {
         this.pullingUUID = input.read("PullingUUID", UUIDUtil.CODEC).orElse(null);
         this.entityData.set(DATA_WOOD_TYPE, input.read("WoodType", com.mojang.serialization.Codec.STRING).orElse(WoodType.OAK.name()));
+        for (int i = 0; i < DATA_WHEEL_WOOD_TYPE.length; i++) {
+            final String name = input.read("WheelWoodType" + i, com.mojang.serialization.Codec.STRING).orElse(WoodType.OAK.name());
+            this.entityData.set(DATA_WHEEL_WOOD_TYPE[i], name);
+            if (i < this.wheels.size()) {
+                this.wheels.get(i).setWoodType(WoodType.values().filter(t -> t.name().equals(name)).findFirst().orElse(WoodType.OAK));
+            }
+        }
     }
 
     @Override
     protected void addAdditionalSaveData(final ValueOutput output) {
         output.storeNullable("PullingUUID", UUIDUtil.CODEC, this.pullingUUID);
         output.store("WoodType", com.mojang.serialization.Codec.STRING, this.entityData.get(DATA_WOOD_TYPE));
+        for (int i = 0; i < DATA_WHEEL_WOOD_TYPE.length; i++) {
+            output.store("WheelWoodType" + i, com.mojang.serialization.Codec.STRING, this.entityData.get(DATA_WHEEL_WOOD_TYPE[i]));
+        }
     }
 
     @Override

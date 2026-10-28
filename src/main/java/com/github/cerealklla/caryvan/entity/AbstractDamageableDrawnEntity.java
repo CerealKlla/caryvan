@@ -89,6 +89,18 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     /** One bit per {@link #wheels} index -- synced so the client-side renderer can pick the broken wheel texture. */
     private static final EntityDataAccessor<Integer> DATA_BROKEN_WHEEL_MASK =
             SynchedEntityData.defineId(AbstractDamageableDrawnEntity.class, EntityDataSerializers.INT);
+    // Wainwright Station wood-species mixing, 2026-10-28 -- one synced field per wheel index,
+    // exact copy of DATA_WOOD_TYPE's own shape applied per wheel instead of once for the whole
+    // entity (confirmed with the user: simpler and matches this codebase's own convention better
+    // than a packed/joined representation). Fixed at 4 entries -- every concrete subclass in this
+    // hierarchy (Wagon, Carriage) has exactly 4 wheels; Carriage just never exposes this via any
+    // crafting/assembly UI, per this feature's own confirmed scope.
+    private static final EntityDataAccessor<String>[] DATA_WHEEL_WOOD_TYPE = new EntityDataAccessor[] {
+            SynchedEntityData.defineId(AbstractDamageableDrawnEntity.class, EntityDataSerializers.STRING),
+            SynchedEntityData.defineId(AbstractDamageableDrawnEntity.class, EntityDataSerializers.STRING),
+            SynchedEntityData.defineId(AbstractDamageableDrawnEntity.class, EntityDataSerializers.STRING),
+            SynchedEntityData.defineId(AbstractDamageableDrawnEntity.class, EntityDataSerializers.STRING),
+    };
 
     protected List<CartWheel> wheels;
     private Entity pulling;
@@ -1093,6 +1105,27 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         super.defineSynchedData(builder);
         builder.define(DATA_WOOD_TYPE, WoodType.OAK.name());
         builder.define(DATA_BROKEN_WHEEL_MASK, 0);
+        for (final EntityDataAccessor<String> accessor : DATA_WHEEL_WOOD_TYPE) {
+            builder.define(accessor, WoodType.OAK.name());
+        }
+    }
+
+    /**
+     * Wainwright Station wood-species mixing, 2026-10-28 -- the authoritative, client-visible
+     * per-wheel species, read directly off synced entity data, same shape {@link
+     * #isWheelBroken(int)} already uses (not {@code wheels.get(wheel).getWoodType()}, which is
+     * only ever kept consistent server-side -- see {@link CartWheel}'s own doc).
+     */
+    public WoodType getWheelWoodType(final int wheel) {
+        return WoodType.values()
+                .filter(type -> type.name().equals(this.entityData.get(DATA_WHEEL_WOOD_TYPE[wheel])))
+                .findFirst()
+                .orElse(WoodType.OAK);
+    }
+
+    public void setWheelWoodType(final int wheel, final WoodType woodType) {
+        this.entityData.set(DATA_WHEEL_WOOD_TYPE[wheel], woodType.name());
+        this.wheels.get(wheel).setWoodType(woodType);
     }
 
     /**
@@ -1123,6 +1156,13 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         super.readAdditionalSaveData(input);
         this.pullingUUID = input.read("PullingUUID", UUIDUtil.CODEC).orElse(null);
         this.entityData.set(DATA_WOOD_TYPE, input.read("WoodType", com.mojang.serialization.Codec.STRING).orElse(WoodType.OAK.name()));
+        for (int i = 0; i < DATA_WHEEL_WOOD_TYPE.length; i++) {
+            final String name = input.read("WheelWoodType" + i, com.mojang.serialization.Codec.STRING).orElse(WoodType.OAK.name());
+            this.entityData.set(DATA_WHEEL_WOOD_TYPE[i], name);
+            if (i < this.wheels.size()) {
+                this.wheels.get(i).setWoodType(WoodType.values().filter(t -> t.name().equals(name)).findFirst().orElse(WoodType.OAK));
+            }
+        }
         this.ownerId = input.read("OwnerId", UUIDUtil.CODEC).orElse(null);
         this.ownerName = input.getString("OwnerName").orElse(null);
         this.brokenWheelCount = input.getIntOr("BrokenWheelCount", 0);
@@ -1136,6 +1176,9 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         super.addAdditionalSaveData(output);
         output.storeNullable("PullingUUID", UUIDUtil.CODEC, this.pullingUUID);
         output.store("WoodType", com.mojang.serialization.Codec.STRING, this.entityData.get(DATA_WOOD_TYPE));
+        for (int i = 0; i < DATA_WHEEL_WOOD_TYPE.length; i++) {
+            output.store("WheelWoodType" + i, com.mojang.serialization.Codec.STRING, this.entityData.get(DATA_WHEEL_WOOD_TYPE[i]));
+        }
         output.storeNullable("OwnerId", UUIDUtil.CODEC, this.ownerId);
         if (this.ownerName != null) {
             output.putString("OwnerName", this.ownerName);

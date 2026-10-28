@@ -2,6 +2,7 @@ package com.github.cerealklla.caryvan;
 
 import com.mojang.blaze3d.platform.InputConstants;
 
+import com.github.cerealklla.caryvan.client.FloatingIconRenderer;
 import com.github.cerealklla.caryvan.client.ModModelLayers;
 import com.github.cerealklla.caryvan.client.renderer.entity.AnimalCartRenderer;
 import com.github.cerealklla.caryvan.client.renderer.entity.CarriageRenderer;
@@ -22,8 +23,11 @@ import com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmReceivedEvent;
 import com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmPayload;
 import com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmReceivedEvent;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
+import com.github.cerealklla.caryvan.registration.ModBlockEntities;
 import com.github.cerealklla.caryvan.registration.ModEntities;
+import com.github.cerealklla.caryvan.registration.ModItems;
 import com.github.cerealklla.caryvan.registration.ModMenus;
+import com.github.cerealklla.caryvan.wainwright.client.WainwrightStationScreen;
 
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -66,6 +70,12 @@ public class CaryvanModClient {
     @SubscribeEvent
     static void onOpenSlotRemovalConfirmReceived(OpenSlotRemovalConfirmReceivedEvent event) {
         onOpenSlotRemovalConfirm(event.payload());
+    }
+
+    @SubscribeEvent
+    static void onWainwrightPreviewImageReceived(com.github.cerealklla.caryvan.wainwright.preview.WainwrightPreviewImageReceivedEvent event) {
+        com.github.cerealklla.caryvan.wainwright.preview.client.ClientWainwrightPreviewCache.store(
+                event.payload().key(), event.payload().pngBytes());
     }
 
     /**
@@ -119,6 +129,13 @@ public class CaryvanModClient {
         event.registerEntityRenderer(ModEntities.ANIMAL_CART.get(), AnimalCartRenderer::new);
         event.registerEntityRenderer(ModEntities.WAGON.get(), WagonRenderer::new);
         event.registerEntityRenderer(ModEntities.CARRIAGE.get(), CarriageRenderer::new);
+        // Explicit user request, 2026-10-28: "Wainwright Station should have a wheel floating over
+        // it like our other crafting tables" -- mirrors Lyfe's own identical structure-block
+        // treatment (see FloatingIconRenderer's own doc). Oak Wheels is just a fixed representative
+        // icon -- the station itself has no per-instance species concept to vary it by.
+        event.registerBlockEntityRenderer(ModBlockEntities.WAINWRIGHT_STATION.get(),
+                context -> new FloatingIconRenderer<>(be -> new net.minecraft.world.item.ItemStack(
+                        ModItems.wheelsFor(net.minecraft.world.level.block.state.properties.WoodType.OAK))));
     }
 
     @SubscribeEvent
@@ -126,6 +143,7 @@ public class CaryvanModClient {
         event.register(ModMenus.ANIMAL_CART.get(), AnimalCartScreen::new);
         event.register(ModMenus.WAGON.get(), WagonScreen::new);
         event.register(ModMenus.CARRIAGE.get(), CarriageScreen::new);
+        event.register(ModMenus.WAINWRIGHT_STATION.get(), WainwrightStationScreen::new);
     }
 
     @SubscribeEvent

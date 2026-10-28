@@ -53,6 +53,17 @@ public final class ModItems {
     // Wheels fixing a damaged wheel; see AbstractDamageableDrawnInventoryEntity#handleRepairFromCargo's
     // own doc for the shared cargo-scanning mechanism both now go through.
     private static final Map<WoodType, DeferredItem<Item>> DOORS = new HashMap<>();
+    // Wainwright Station wood-species mixing, 2026-10-28 -- real user spec: a new "Parts"/"Body"
+    // crafting flow where a cart's body and wheels are crafted/chosen independently (Carriage
+    // excluded from this feature for now, per explicit scope confirmation). Same plain-Item,
+    // no-custom-class shape as Wheels/Doors above -- these are pure crafting intermediates, never
+    // placed/used directly. Originally a single shared "Cart Body" fed both Hand Cart and Animal
+    // Cart; split into two separate items the same day once the user confirmed (after a real
+    // comparison of the two entities' geometry/mechanics) that Hand Cart and Animal Cart are
+    // genuinely distinct, not redundant -- so their Body parts/costs should be independent too.
+    private static final Map<WoodType, DeferredItem<Item>> HAND_CART_BODIES = new HashMap<>();
+    private static final Map<WoodType, DeferredItem<Item>> ANIMAL_CART_BODIES = new HashMap<>();
+    private static final Map<WoodType, DeferredItem<Item>> WAGON_BODIES = new HashMap<>();
 
     static {
         WoodType.values().forEach(woodType -> {
@@ -82,6 +93,18 @@ public final class ModItems {
                             .setId(ResourceKey.create(Registries.ITEM, id)))));
             DOORS.put(woodType, ITEMS.register(
                     woodType.name() + "_door",
+                    id -> new Item(new Item.Properties()
+                            .setId(ResourceKey.create(Registries.ITEM, id)))));
+            HAND_CART_BODIES.put(woodType, ITEMS.register(
+                    woodType.name() + "_hand_cart_body",
+                    id -> new Item(new Item.Properties()
+                            .setId(ResourceKey.create(Registries.ITEM, id)))));
+            ANIMAL_CART_BODIES.put(woodType, ITEMS.register(
+                    woodType.name() + "_animal_cart_body",
+                    id -> new Item(new Item.Properties()
+                            .setId(ResourceKey.create(Registries.ITEM, id)))));
+            WAGON_BODIES.put(woodType, ITEMS.register(
+                    woodType.name() + "_wagon_body",
                     id -> new Item(new Item.Properties()
                             .setId(ResourceKey.create(Registries.ITEM, id)))));
         });
@@ -126,5 +149,17 @@ public final class ModItems {
 
     public static Item doorFor(final WoodType woodType) {
         return DOORS.get(woodType).get();
+    }
+
+    public static Item handCartBodyFor(final WoodType woodType) {
+        return HAND_CART_BODIES.get(woodType).get();
+    }
+
+    public static Item animalCartBodyFor(final WoodType woodType) {
+        return ANIMAL_CART_BODIES.get(woodType).get();
+    }
+
+    public static Item wagonBodyFor(final WoodType woodType) {
+        return WAGON_BODIES.get(woodType).get();
     }
 }

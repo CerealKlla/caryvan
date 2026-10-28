@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "#minecraft:planks",
+    "#minecraft:planks",
+    "#minecraft:planks",
+    "#minecraft:planks",
+    "minecraft:stick",
+    "minecraft:stick",
+    "#caryvan:wheels"
+  ],
+  "result": {
+    "id": "caryvan:wainwright_station"
+  }
+}

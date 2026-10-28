@@ -7,6 +7,9 @@ import com.github.cerealklla.caryvan.interaction.DamageableCartTargetingListener
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.recipe.CarriageCraftingGate;
 import com.github.cerealklla.caryvan.registration.ModAttachments;
+import com.github.cerealklla.caryvan.registration.ModBlockEntities;
+import com.github.cerealklla.caryvan.registration.ModBlocks;
+import com.github.cerealklla.caryvan.registration.ModDataComponents;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 import com.github.cerealklla.caryvan.registration.ModItems;
 import com.github.cerealklla.caryvan.registration.ModMenus;
@@ -40,6 +43,10 @@ public class CaryvanMod {
         ModItems.ITEMS.register(modEventBus);
         ModMenus.MENU_TYPES.register(modEventBus);
         ModAttachments.ATTACHMENT_TYPES.register(modEventBus);
+        ModDataComponents.DATA_COMPONENTS.register(modEventBus);
+        ModBlocks.BLOCKS.register(modEventBus);
+        ModBlocks.ITEMS.register(modEventBus);
+        ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::registerPayloads);
@@ -143,6 +150,27 @@ public class CaryvanMod {
                 com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmPayload.STREAM_CODEC,
                 (payload, context) -> NeoForge.EVENT_BUS.post(
                         new com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmReceivedEvent(payload)));
+
+        registrar.playToServer(com.github.cerealklla.caryvan.wainwright.preview.RequestWainwrightPreviewPayload.TYPE,
+                com.github.cerealklla.caryvan.wainwright.preview.RequestWainwrightPreviewPayload.STREAM_CODEC,
+                (payload, context) -> {
+                    if (!(context.player() instanceof ServerPlayer player)) {
+                        return;
+                    }
+                    var storage = com.github.cerealklla.caryvan.wainwright.preview.WainwrightPreviewStorage.get();
+                    String key = com.github.cerealklla.caryvan.wainwright.preview.WainwrightPreviewStorage.keyFor(
+                            payload.cartType(), payload.bodySpecies(), payload.wheelSpecies());
+                    storage.ensureRequested(payload.cartType(), payload.bodySpecies(), payload.wheelSpecies());
+                    storage.readPngBytes(key).ifPresent(bytes ->
+                            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player,
+                                    new com.github.cerealklla.caryvan.wainwright.preview.WainwrightPreviewImagePayload(key, bytes)));
+                });
+        // Same common-class/event-bridge pattern as OpenCartPickUpConfirmReceivedEvent above -- see
+        // WainwrightPreviewImageReceivedEvent's own doc for why this can't touch client-only types here.
+        registrar.playToClient(com.github.cerealklla.caryvan.wainwright.preview.WainwrightPreviewImagePayload.TYPE,
+                com.github.cerealklla.caryvan.wainwright.preview.WainwrightPreviewImagePayload.STREAM_CODEC,
+                (payload, context) -> NeoForge.EVENT_BUS.post(
+                        new com.github.cerealklla.caryvan.wainwright.preview.WainwrightPreviewImageReceivedEvent(payload)));
     }
 
     /** The one place {@link AbstractDrawnEntity#pulledTick()} is actually called -- see {@link CaryvanWorld}'s own doc for why. */

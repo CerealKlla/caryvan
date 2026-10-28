@@ -1,5 +1,6 @@
 package com.github.cerealklla.caryvan.item;
 
+import com.github.cerealklla.caryvan.registration.ModDataComponents;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 
 import net.minecraft.sounds.SoundEvents;
@@ -76,6 +77,19 @@ public final class WagonItem extends Item {
 
         final var damageable = (com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) cart;
         damageable.setWoodType(this.woodType);
+        // Wainwright Station wood-species mixing, 2026-10-28 -- a Wagon Body assembled with a chosen
+        // wheel species carries it via ModDataComponents.WHEEL_WOOD_TYPE; a plain wagon item (no
+        // component present, e.g. picked straight from creative or the old single-species recipe)
+        // just uses its own body species for the wheels too, matching pre-Wainwright behavior.
+        final WoodType wheelWoodType = stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get()) == null
+                ? this.woodType
+                : WoodType.values()
+                        .filter(type -> type.name().equals(stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get())))
+                        .findFirst()
+                        .orElse(this.woodType);
+        for (int i = 0; i < 4; i++) {
+            damageable.setWheelWoodType(i, wheelWoodType);
+        }
         // Owner capture, 2026-10-26 (health system work) -- Pick Up/Repair are owner-only actions.
         damageable.setOwner(player);
         level.addFreshEntity(cart);

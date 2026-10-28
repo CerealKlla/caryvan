@@ -7,6 +7,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.WoodType;
 
 /**
  * One wheel's rotation state for a cart entity -- adapted from NiftyCarts
@@ -37,6 +38,12 @@ public final class CartWheel {
     // visual/functional state (see AbstractDamageableDrawnEntity's own doc for the damage ->
     // wheel-break formula). Always false for Hand Cart/Animal Cart, which never set it.
     private boolean broken;
+    // Wainwright Station wood-species mixing, 2026-10-28 -- this wheel's own species, independent
+    // of the cart's body WoodType. Defaults to OAK (same default the body's own single WoodType
+    // field already used before this feature existed) until the owning entity's placement/load
+    // logic sets the real value. Not synced by this class itself -- see the owning entity's own
+    // packed-sync field, same "plain POJO, owner entity handles sync" shape #broken already uses.
+    private WoodType woodType = WoodType.OAK;
 
     public CartWheel(final Entity cart, final float offsetX, final float offsetZ, final float circumference) {
         this.cart = cart;
@@ -57,6 +64,14 @@ public final class CartWheel {
 
     public void setBroken(final boolean broken) {
         this.broken = broken;
+    }
+
+    public WoodType getWoodType() {
+        return this.woodType;
+    }
+
+    public void setWoodType(final WoodType woodType) {
+        this.woodType = woodType;
     }
 
     public void tick() {

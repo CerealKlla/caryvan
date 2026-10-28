@@ -1,0 +1,38 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_oak_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:oak_wheels" } ] } },
+    "has_spruce_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:spruce_wheels" } ] } },
+    "has_birch_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:birch_wheels" } ] } },
+    "has_acacia_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:acacia_wheels" } ] } },
+    "has_cherry_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:cherry_wheels" } ] } },
+    "has_jungle_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:jungle_wheels" } ] } },
+    "has_dark_oak_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:dark_oak_wheels" } ] } },
+    "has_pale_oak_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:pale_oak_wheels" } ] } },
+    "has_mangrove_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:mangrove_wheels" } ] } },
+    "has_bamboo_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:bamboo_wheels" } ] } },
+    "has_crimson_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:crimson_wheels" } ] } },
+    "has_warped_wheels": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "caryvan:warped_wheels" } ] } }
+  },
+  "requirements": [
+    [
+      "has_oak_wheels",
+      "has_spruce_wheels",
+      "has_birch_wheels",
+      "has_acacia_wheels",
+      "has_cherry_wheels",
+      "has_jungle_wheels",
+      "has_dark_oak_wheels",
+      "has_pale_oak_wheels",
+      "has_mangrove_wheels",
+      "has_bamboo_wheels",
+      "has_crimson_wheels",
+      "has_warped_wheels"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "caryvan:wainwright_station"
+    ]
+  }
+}
