@@ -552,11 +552,22 @@ public final class CarriageModel extends EntityModel<CarriageRenderState> {
         wheel.setRotationPoint(xOffset, WHEEL_Y, z);
         wheel.addBox(-1.0F, -1.0F, -1.0F, 2, 2, 2);
         final float spokeLength = WHEEL_RADIUS - 2.0F;
-        final float rimZ = WHEEL_RADIUS - 1.14F;
+        // Real bug fix, 2026-10-27 -- live Blockbench reference comparison against HandCartModel's own
+        // wheel() (proven-correct) and WagonModel's own wheel() (accidentally correct -- its hardcoded
+        // -4.5F/9.86F only work because ITS spokeLength happens to be 9, not this class's 8) found this
+        // class's rim box was never actually re-derived for its own WHEEL_RADIUS: the box wasn't centered
+        // on its own rotation axis (-4.5F to +3.5F for a length-8 box, not the symmetric -4.0F to +4.0F a
+        // closed octagon needs), and rimZ used a flat, non-derived "-1.14F" fudge instead of the real
+        // apothem formula HandCartModel's own wheelRadius already uses -- together these left every rim
+        // segment's seam slightly misaligned, a visible "saw tooth" seam confirmed directly against a real
+        // screenshot. Same closed-regular-octagon derivation as HandCartModel#createLayer, just solved for
+        // a chosen chord length (spokeLength) instead of a chosen radius.
+        final float rimHalfAngle = Mth.PI / 8.0F;
+        final float rimZ = (spokeLength / 2.0F) * (Mth.cos(rimHalfAngle) / Mth.sin(rimHalfAngle)) - 1.0F;
         for (int i = 0; i < 8; i++) {
             if (!(brokenLook && i == 0)) {
                 final EasyMeshBuilder rim = new EasyMeshBuilder(name + "_rim_" + i, 58, 54);
-                rim.addBox(-1.0F, -4.5F, rimZ, 2, spokeLength, 1);
+                rim.addBox(-1.0F, -spokeLength / 2.0F, rimZ, 2, spokeLength, 1);
                 rim.xRot = i * Mth.PI / 4.0F;
                 wheel.addChild(rim);
             }

@@ -5,6 +5,7 @@ import com.github.cerealklla.caryvan.interaction.CartMountDebugListener;
 import com.github.cerealklla.caryvan.interaction.CartMountInteractionListener;
 import com.github.cerealklla.caryvan.interaction.DamageableCartTargetingListener;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
+import com.github.cerealklla.caryvan.recipe.CarriageCraftingGate;
 import com.github.cerealklla.caryvan.registration.ModAttachments;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 import com.github.cerealklla.caryvan.registration.ModItems;
@@ -60,6 +61,10 @@ public class CaryvanMod {
         // Real user report, 2026-10-25: "it did drop 'free' leads when the horse died which it
         // should not do." See that class's own doc for the full real-bytecode-traced root cause.
         NeoForge.EVENT_BUS.register(new CartMountDeathListener());
+        // Carriage redesign is still in active live iteration (body/doors/wheels), 2026-10-28 --
+        // not ready for players to craft. Removes the crafting recipe only; entity/item/renderer
+        // code and the repair recipes are untouched -- see that class's own doc.
+        NeoForge.EVENT_BUS.register(new CarriageCraftingGate());
 
         // Replaces manually crafting/finding a Hand Cart while testing -- contributed into Kyt's
         // mod-managed "Dev" Kyt (/kyt getDev), same pattern Blueprynts/Settlemynts already use for
