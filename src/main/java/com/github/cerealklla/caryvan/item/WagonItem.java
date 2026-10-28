@@ -77,18 +77,34 @@ public final class WagonItem extends Item {
 
         final var damageable = (com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity) cart;
         damageable.setWoodType(this.woodType);
-        // Wainwright Station wood-species mixing, 2026-10-28 -- a Wagon Body assembled with a chosen
-        // wheel species carries it via ModDataComponents.WHEEL_WOOD_TYPE; a plain wagon item (no
-        // component present, e.g. picked straight from creative or the old single-species recipe)
-        // just uses its own body species for the wheels too, matching pre-Wainwright behavior.
-        final WoodType wheelWoodType = stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get()) == null
-                ? this.woodType
-                : WoodType.values()
-                        .filter(type -> type.name().equals(stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get())))
-                        .findFirst()
-                        .orElse(this.woodType);
-        for (int i = 0; i < 4; i++) {
-            damageable.setWheelWoodType(i, wheelWoodType);
+        // Real per-wheel species, from a Pick Up that captured genuinely mixed wheels (see
+        // ModDataComponents#WHEEL_WOOD_TYPES' own doc, 2026-10-28) -- checked FIRST since it's the
+        // more specific, more complete data when present. Falls back to the original single shared
+        // WHEEL_WOOD_TYPE (Wainwright Station assembly's own one-species-for-all-4 choice, or a
+        // plain wagon item with neither component -- e.g. straight from creative) otherwise, exactly
+        // as before this fix.
+        final java.util.List<String> perWheelSpecies = stack.get(ModDataComponents.WHEEL_WOOD_TYPES.get());
+        if (perWheelSpecies != null && perWheelSpecies.size() == 4) {
+            for (int i = 0; i < 4; i++) {
+                final String name = perWheelSpecies.get(i);
+                final WoodType resolved = WoodType.values().filter(type -> type.name().equals(name)).findFirst().orElse(this.woodType);
+                damageable.setWheelWoodType(i, resolved);
+            }
+        } else {
+            // Wainwright Station wood-species mixing, 2026-10-28 -- a Wagon Body assembled with a
+            // chosen wheel species carries it via ModDataComponents.WHEEL_WOOD_TYPE; a plain wagon
+            // item (no component present, e.g. picked straight from creative or the old
+            // single-species recipe) just uses its own body species for the wheels too, matching
+            // pre-Wainwright behavior.
+            final WoodType wheelWoodType = stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get()) == null
+                    ? this.woodType
+                    : WoodType.values()
+                            .filter(type -> type.name().equals(stack.get(ModDataComponents.WHEEL_WOOD_TYPE.get())))
+                            .findFirst()
+                            .orElse(this.woodType);
+            for (int i = 0; i < 4; i++) {
+                damageable.setWheelWoodType(i, wheelWoodType);
+            }
         }
         // Owner capture, 2026-10-26 (health system work) -- Pick Up/Repair are owner-only actions.
         damageable.setOwner(player);

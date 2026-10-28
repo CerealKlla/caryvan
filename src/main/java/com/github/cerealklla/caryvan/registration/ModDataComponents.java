@@ -28,4 +28,23 @@ public final class ModDataComponents {
             DATA_COMPONENTS.registerComponentType("wheel_wood_type", builder -> builder
                     .persistent(com.mojang.serialization.Codec.STRING)
                     .networkSynchronized(ByteBufCodecs.STRING_UTF8));
+
+    /**
+     * Real gap found and fixed 2026-10-28, same day Wagon Repair first gained real per-wheel
+     * species (see that feature's own doc): "And these are all stored on the item when it is picked
+     * up right?" -- they were NOT. {@code AbstractDamageableDrawnEntity#executePickUp} builds its
+     * result {@code ItemStack} via a plain {@code new ItemStack(getCartItem())} with no data
+     * components at all, and {@link #WHEEL_WOOD_TYPE} above only ever carried ONE shared wheel
+     * species (the Wainwright Station Body tab's own assembly-time choice, applied uniformly to
+     * every wheel at spawn) -- genuinely mixed per-wheel species from an in-world Repair had no
+     * component capable of surviving a round trip through an {@code ItemStack} at all. This one
+     * does: exactly 4 entries, same 0=leftFront/1=rightFront/2=leftBack/3=rightBack order {@code
+     * AbstractDamageableDrawnEntity#getWheelWoodType}'s own array already uses. Wagon-only --
+     * Hand Cart/Animal Cart never gained per-wheel tracking in the first place (see that feature's
+     * own doc for why), so they have nothing to carry here.
+     */
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<java.util.List<String>>> WHEEL_WOOD_TYPES =
+            DATA_COMPONENTS.registerComponentType("wheel_wood_types", builder -> builder
+                    .persistent(com.mojang.serialization.Codec.STRING.listOf())
+                    .networkSynchronized(ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list())));
 }

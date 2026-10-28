@@ -709,6 +709,16 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
         this.onPickUp(level, broken);
         this.dumpCargoOnPickUp(level);
         final net.minecraft.world.item.ItemStack result = new net.minecraft.world.item.ItemStack(broken ? this.getBrokenCartItem() : this.getCartItem());
+        // Real gap fixed 2026-10-28 (see ModDataComponents#WHEEL_WOOD_TYPES' own doc): without this,
+        // picking up a cart whose wheels had been individually Repaired to different species than
+        // the body silently lost that -- the old single WHEEL_WOOD_TYPE component (Wainwright
+        // Station assembly only) was never set here at all, and couldn't have represented 4
+        // independent values even if it had been.
+        final java.util.List<String> wheelSpecies = new java.util.ArrayList<>(this.wheels.size());
+        for (int i = 0; i < this.wheels.size(); i++) {
+            wheelSpecies.add(getWheelWoodType(i).name());
+        }
+        result.set(com.github.cerealklla.caryvan.registration.ModDataComponents.WHEEL_WOOD_TYPES.get(), wheelSpecies);
         if (!player.getInventory().add(result)) {
             this.spawnAtLocation(level, result);
         }
