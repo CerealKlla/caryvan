@@ -67,6 +67,9 @@ public class WainwrightStationScreen extends AbstractContainerScreen<WainwrightS
 
     private static final int PREVIEW_BOX_WIDTH = 80;
     private static final int PREVIEW_BOX_HEIGHT = 60;
+    // Width reserved for the summary/cost text column to the preview image's left -- wide enough for
+    // the longest real cost line ("X / Y <wood> Animal Cart Body") at this screen's font.
+    private static final int INFO_COLUMN_WIDTH = 230;
     // The full-size render CaryvanImager writes -- see its own Main.java default --width/--height.
     private static final int PREVIEW_SOURCE_WIDTH = 512;
     private static final int PREVIEW_SOURCE_HEIGHT = 384;
@@ -371,13 +374,11 @@ public class WainwrightStationScreen extends AbstractContainerScreen<WainwrightS
                     final WoodType body = allSpecies().get(selectedBodySpecies);
                     final WoodType wheel = allSpecies().get(selectedWheelSpecies);
                     final int previewY = y + SPECIES_GRID_Y + GRID_MAX_HEIGHT + 6;
-                    drawPreview(graphics, x + CONTENT_X, previewY, body, wheel);
+                    // Summary/cost text on the left, preview image on the right -- explicit user
+                    // request 2026-10-28, swapped from the original image-left/text-right layout.
+                    final int infoX = x + CONTENT_X;
+                    drawPreview(graphics, infoX + INFO_COLUMN_WIDTH, previewY, body, wheel);
 
-                    // Summary/cost text sits BESIDE the preview image, not below it -- real
-                    // live-test bug, 2026-10-28 (see IMAGE_HEIGHT's own doc): there's plenty of
-                    // horizontal room in this panel, so stacking this text under the image instead
-                    // of next to it was pure wasted vertical space, the actual scarce resource.
-                    final int infoX = x + CONTENT_X + PREVIEW_BOX_WIDTH + 10;
                     final String summary = TYPE_LABELS[selectedType] + ": " + displayName(body) + " body / " + displayName(wheel) + " wheels";
                     graphics.text(font, Component.literal(summary), infoX, previewY, LABEL_TEXT_COLOR, false);
 
