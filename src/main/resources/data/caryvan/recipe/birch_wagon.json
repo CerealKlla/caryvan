@@ -1,14 +1,17 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "caryvan:birch_wheels",
-    "caryvan:birch_wheels",
-    "caryvan:birch_wheels",
-    "caryvan:birch_wheels",
-    "minecraft:birch_planks",
-    "minecraft:birch_planks"
+  "pattern": [
+    "WPW",
+    "FCF",
+    "WPW"
   ],
+  "key": {
+    "W": "caryvan:birch_wheels",
+    "P": "minecraft:birch_planks",
+    "F": "minecraft:birch_fence",
+    "C": "minecraft:chest"
+  },
   "result": {
     "id": "caryvan:birch_wagon"
   }

@@ -7,15 +7,9 @@
     "PSP"
   ],
   "key": {
-    "P": {
-      "item": "minecraft:acacia_planks"
-    },
-    "S": {
-      "item": "minecraft:stick"
-    },
-    "I": {
-      "item": "minecraft:iron_ingot"
-    }
+    "P": "minecraft:acacia_planks",
+    "S": "minecraft:stick",
+    "I": "minecraft:iron_ingot"
   },
   "result": {
     "id": "caryvan:acacia_wheels"

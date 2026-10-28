@@ -7,21 +7,11 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:birch_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:birch_planks"
-    },
-    "I": {
-      "item": "minecraft:iron_ingot"
-    },
-    "W": {
-      "item": "caryvan:birch_wheels"
-    }
+    "F": "minecraft:birch_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:birch_planks",
+    "I": "minecraft:iron_ingot",
+    "W": "caryvan:birch_wheels"
   },
   "result": {
     "id": "caryvan:birch_animal_cart"

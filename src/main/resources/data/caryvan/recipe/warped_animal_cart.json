@@ -7,21 +7,11 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:warped_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:warped_planks"
-    },
-    "I": {
-      "item": "minecraft:iron_ingot"
-    },
-    "W": {
-      "item": "caryvan:warped_wheels"
-    }
+    "F": "minecraft:warped_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:warped_planks",
+    "I": "minecraft:iron_ingot",
+    "W": "caryvan:warped_wheels"
   },
   "result": {
     "id": "caryvan:warped_animal_cart"

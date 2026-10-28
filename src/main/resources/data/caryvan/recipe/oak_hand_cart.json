@@ -7,18 +7,10 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:oak_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:oak_planks"
-    },
-    "W": {
-      "item": "caryvan:oak_wheels"
-    }
+    "F": "minecraft:oak_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:oak_planks",
+    "W": "caryvan:oak_wheels"
   },
   "result": {
     "id": "caryvan:oak_hand_cart"

@@ -7,18 +7,10 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:cherry_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:cherry_planks"
-    },
-    "W": {
-      "item": "caryvan:cherry_wheels"
-    }
+    "F": "minecraft:cherry_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:cherry_planks",
+    "W": "caryvan:cherry_wheels"
   },
   "result": {
     "id": "caryvan:cherry_hand_cart"

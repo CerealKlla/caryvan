@@ -1,14 +1,17 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "caryvan:oak_wheels",
-    "caryvan:oak_wheels",
-    "caryvan:oak_wheels",
-    "caryvan:oak_wheels",
-    "minecraft:oak_planks",
-    "minecraft:oak_planks"
+  "pattern": [
+    "WPW",
+    "FCF",
+    "WPW"
   ],
+  "key": {
+    "W": "caryvan:oak_wheels",
+    "P": "minecraft:oak_planks",
+    "F": "minecraft:oak_fence",
+    "C": "minecraft:chest"
+  },
   "result": {
     "id": "caryvan:oak_wagon"
   }

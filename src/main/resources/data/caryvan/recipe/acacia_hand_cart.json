@@ -7,18 +7,10 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:acacia_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:acacia_planks"
-    },
-    "W": {
-      "item": "caryvan:acacia_wheels"
-    }
+    "F": "minecraft:acacia_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:acacia_planks",
+    "W": "caryvan:acacia_wheels"
   },
   "result": {
     "id": "caryvan:acacia_hand_cart"

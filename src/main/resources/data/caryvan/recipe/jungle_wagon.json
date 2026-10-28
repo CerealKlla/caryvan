@@ -1,14 +1,17 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "caryvan:jungle_wheels",
-    "caryvan:jungle_wheels",
-    "caryvan:jungle_wheels",
-    "caryvan:jungle_wheels",
-    "minecraft:jungle_planks",
-    "minecraft:jungle_planks"
+  "pattern": [
+    "WPW",
+    "FCF",
+    "WPW"
   ],
+  "key": {
+    "W": "caryvan:jungle_wheels",
+    "P": "minecraft:jungle_planks",
+    "F": "minecraft:jungle_fence",
+    "C": "minecraft:chest"
+  },
   "result": {
     "id": "caryvan:jungle_wagon"
   }

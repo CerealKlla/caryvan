@@ -1,14 +1,17 @@
 {
-  "type": "minecraft:crafting_shapeless",
+  "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "ingredients": [
-    "caryvan:acacia_wheels",
-    "caryvan:acacia_wheels",
-    "caryvan:acacia_wheels",
-    "caryvan:acacia_wheels",
-    "minecraft:acacia_planks",
-    "minecraft:acacia_planks"
+  "pattern": [
+    "WPW",
+    "FCF",
+    "WPW"
   ],
+  "key": {
+    "W": "caryvan:acacia_wheels",
+    "P": "minecraft:acacia_planks",
+    "F": "minecraft:acacia_fence",
+    "C": "minecraft:chest"
+  },
   "result": {
     "id": "caryvan:acacia_wagon"
   }

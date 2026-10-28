@@ -7,21 +7,11 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:mangrove_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:mangrove_planks"
-    },
-    "I": {
-      "item": "minecraft:iron_ingot"
-    },
-    "W": {
-      "item": "caryvan:mangrove_wheels"
-    }
+    "F": "minecraft:mangrove_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:mangrove_planks",
+    "I": "minecraft:iron_ingot",
+    "W": "caryvan:mangrove_wheels"
   },
   "result": {
     "id": "caryvan:mangrove_animal_cart"

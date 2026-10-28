@@ -7,15 +7,9 @@
     "PSP"
   ],
   "key": {
-    "P": {
-      "item": "minecraft:cherry_planks"
-    },
-    "S": {
-      "item": "minecraft:stick"
-    },
-    "I": {
-      "item": "minecraft:iron_ingot"
-    }
+    "P": "minecraft:cherry_planks",
+    "S": "minecraft:stick",
+    "I": "minecraft:iron_ingot"
   },
   "result": {
     "id": "caryvan:cherry_wheels"

@@ -7,18 +7,10 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:jungle_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:jungle_planks"
-    },
-    "W": {
-      "item": "caryvan:jungle_wheels"
-    }
+    "F": "minecraft:jungle_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:jungle_planks",
+    "W": "caryvan:jungle_wheels"
   },
   "result": {
     "id": "caryvan:jungle_hand_cart"

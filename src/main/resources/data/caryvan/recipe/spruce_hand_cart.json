@@ -7,18 +7,10 @@
     "W W"
   ],
   "key": {
-    "F": {
-      "item": "minecraft:spruce_fence"
-    },
-    "C": {
-      "item": "minecraft:chest"
-    },
-    "P": {
-      "item": "minecraft:spruce_planks"
-    },
-    "W": {
-      "item": "caryvan:spruce_wheels"
-    }
+    "F": "minecraft:spruce_fence",
+    "C": "minecraft:chest",
+    "P": "minecraft:spruce_planks",
+    "W": "caryvan:spruce_wheels"
   },
   "result": {
     "id": "caryvan:spruce_hand_cart"
