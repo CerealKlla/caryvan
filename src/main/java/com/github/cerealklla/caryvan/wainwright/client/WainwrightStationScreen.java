@@ -504,7 +504,14 @@ public class WainwrightStationScreen extends AbstractContainerScreen<WainwrightS
             if (selected) {
                 graphics.fill(cellX - 1, cellY - 1, cellX + ICON_SIZE + 1, cellY + ICON_SIZE + 1, SELECTION_COLOR);
             }
-            graphics.item(iconFor.apply(w), cellX + 2, cellY + 2);
+            // Real live-test report, 2026-10-28: icons weren't centered in their highlighted cell.
+            // This +2 offset was tuned for ICON_SIZE=20 (back when the selection box was ICON_SIZE+2
+            // = 22px, so centering a native 16px item icon needed a 3px margin -- offset cellX-1+3 =
+            // cellX+2). ICON_SIZE shrank to 16 as part of the same day's vertical-compression fix, but
+            // this offset was never recomputed: the selection box is now only ICON_SIZE+2 = 18px, so
+            // centering a 16px icon needs just a 1px margin -- offset cellX-1+1 = cellX. Matches the
+            // hit-test region below, which already assumed the icon starts at cellX, not cellX+2.
+            graphics.item(iconFor.apply(w), cellX, cellY);
             if (mouseX >= cellX && mouseX < cellX + ICON_SIZE && mouseY >= cellY && mouseY < cellY + ICON_SIZE) {
                 graphics.setTooltipForNextFrame(font, Component.literal(displayName(w)), mouseX, mouseY);
             }
