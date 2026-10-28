@@ -128,6 +128,21 @@ public class CaryvanMod {
                         com.github.cerealklla.caryvan.network.ConfirmSlotRemovalPayload.handle(player, payload.cartEntityId(), payload.slotIndex());
                     }
                 });
+        // Real bug fix, 2026-10-28: these two were only ever registered in CaryvanModClient
+        // (Dist.CLIENT-only), so a real dedicated server never learned the channel existed at all --
+        // "channel missing on the server side" on a genuine Production connection, masked the whole
+        // session by runClient's single-JVM dev environment. Registered here (the common class, which
+        // DOES load on a dedicated server) instead, but the handler can't touch client-only types
+        // directly -- see OpenCartPickUpConfirmReceivedEvent's own doc for why -- so it only posts a
+        // plain event; CaryvanModClient is the one that actually opens the GUI.
+        registrar.playToClient(com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmPayload.TYPE,
+                com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmPayload.STREAM_CODEC,
+                (payload, context) -> NeoForge.EVENT_BUS.post(
+                        new com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmReceivedEvent(payload)));
+        registrar.playToClient(com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmPayload.TYPE,
+                com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmPayload.STREAM_CODEC,
+                (payload, context) -> NeoForge.EVENT_BUS.post(
+                        new com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmReceivedEvent(payload)));
     }
 
     /** The one place {@link AbstractDrawnEntity#pulledTick()} is actually called -- see {@link CaryvanWorld}'s own doc for why. */

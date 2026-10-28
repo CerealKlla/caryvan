@@ -18,7 +18,9 @@ import com.github.cerealklla.caryvan.menu.client.WagonScreen;
 import com.github.cerealklla.caryvan.network.ConfirmCartPickUpPayload;
 import com.github.cerealklla.caryvan.network.ConfirmSlotRemovalPayload;
 import com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmPayload;
+import com.github.cerealklla.caryvan.network.OpenCartPickUpConfirmReceivedEvent;
 import com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmPayload;
+import com.github.cerealklla.caryvan.network.OpenSlotRemovalConfirmReceivedEvent;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.registration.ModEntities;
 import com.github.cerealklla.caryvan.registration.ModMenus;
@@ -37,7 +39,6 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import org.lwjgl.glfw.GLFW;
 
 // This class will not load on dedicated servers. Accessing client side code from here is safe --
@@ -51,20 +52,20 @@ public class CaryvanModClient {
     }
 
     /**
-     * Registered here (not in the common {@code CaryvanMod}) specifically because the handler body
-     * references {@code Minecraft}/{@link ConfirmActionScreen} -- a client-only type reference
-     * inside a common-sourceset class's method would crash a dedicated server the instant that
-     * class is loaded during registry dispatch, per the root project's own CLAUDE.md, even though
-     * the handler itself would never actually run server-side. This whole class only ever loads on
-     * the client (see its own {@code Dist.CLIENT} annotation above), so there's no risk here.
+     * Real bug fix, 2026-10-28: the payload TYPE/CODEC registration moved to the common {@code
+     * CaryvanMod#registerPayloads} (a dedicated server needs to know this channel exists, and this
+     * class never loads there at all -- see {@code OpenCartPickUpConfirmReceivedEvent}'s own doc for
+     * the full story). This class now just listens for the bridge event that handler posts, and does
+     * the actual client-only GUI work here, same as before.
      */
     @SubscribeEvent
-    static void onRegisterPayloadHandlers(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("1");
-        registrar.playToClient(OpenCartPickUpConfirmPayload.TYPE, OpenCartPickUpConfirmPayload.STREAM_CODEC,
-                (payload, context) -> onOpenPickUpConfirm(payload));
-        registrar.playToClient(OpenSlotRemovalConfirmPayload.TYPE, OpenSlotRemovalConfirmPayload.STREAM_CODEC,
-                (payload, context) -> onOpenSlotRemovalConfirm(payload));
+    static void onOpenPickUpConfirmReceived(OpenCartPickUpConfirmReceivedEvent event) {
+        onOpenPickUpConfirm(event.payload());
+    }
+
+    @SubscribeEvent
+    static void onOpenSlotRemovalConfirmReceived(OpenSlotRemovalConfirmReceivedEvent event) {
+        onOpenSlotRemovalConfirm(event.payload());
     }
 
     /**
