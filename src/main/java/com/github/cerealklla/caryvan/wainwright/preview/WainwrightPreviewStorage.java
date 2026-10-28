@@ -33,8 +33,19 @@ public final class WainwrightPreviewStorage {
         return INSTANCE;
     }
 
+    // Bump this whenever CaryvanImager's renderer output for an existing combo would change
+    // meaningfully (e.g. a geometry port) -- real live-test bug, 2026-10-28: a client that had
+    // already fetched+cached a combo's image (ClientWainwrightPreviewCache persists to disk,
+    // GAMEDIR/caryvan/preview_cache/, forever -- by design, since a combo was assumed immutable)
+    // kept showing the OLD placeholder-box render even after the server-side renderer was replaced
+    // with a real geometry port, since nothing about the KEY changed to signal "this is different
+    // now." Folding a version into the key makes a renderer change naturally orphan every old
+    // server-side file AND force every client to re-request+re-cache under a new key, with no
+    // server or client cache to manually clear.
+    private static final String GEOMETRY_VERSION = "v2";
+
     public static String keyFor(final String type, final String bodySpecies, final String wheelSpecies) {
-        return type + "_" + bodySpecies + "_" + wheelSpecies;
+        return GEOMETRY_VERSION + "_" + type + "_" + bodySpecies + "_" + wheelSpecies;
     }
 
     /** Writes the request file if it doesn't already exist -- idempotent, safe to call on every request from a client, not just the first. */
