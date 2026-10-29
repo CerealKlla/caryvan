@@ -1,6 +1,8 @@
 package com.github.cerealklla.caryvan.entity;
 
+import com.github.cerealklla.caryvan.menu.HandCartMenu;
 import com.github.cerealklla.caryvan.registration.ModItems;
+import com.github.cerealklla.caryvan.registration.ModMenus;
 
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -9,17 +11,16 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * Phase 1 of the design document's build order -- player-pulled directly (no animal), real
- * 27-slot cargo storage (vanilla's own {@link ChestMenu#threeRows}, same vanilla-screen-reuse
- * precedent as Kyt/Yconomics' own menus elsewhere in this suite). Adapted from NiftyCarts'
- * {@code HandCartEntity} (MIT licensed, see this repo's own CLAUDE.md), which also uses a plain
- * 27-slot chest menu for this cart.
+ * 27-slot cargo storage. Adapted from NiftyCarts' {@code HandCartEntity} (MIT licensed, see this
+ * repo's own CLAUDE.md), which also uses a plain 27-slot chest menu for this cart -- originally a
+ * direct vanilla {@code ChestMenu.threeRows}, replaced 2026-10-29 by {@link HandCartMenu} (same
+ * layout) so a real "Pick Up" button could be added (see that class's own doc).
  *
  * <p><b>Hitch interaction reworked 2026-10-25, explicit user correction</b> -- "same as horses/
  * chairs: right click toggles, left shift auto dismounts," replacing an earlier dedicated keybind
@@ -77,6 +78,6 @@ public final class HandCartEntity extends AbstractDrawnInventoryEntity {
     @Override
     public AbstractContainerMenu createMenu(final int containerId, final Inventory inventory, final Player player) {
         this.unpackChestVehicleLootTable(player);
-        return ChestMenu.threeRows(containerId, inventory, this);
+        return new HandCartMenu(ModMenus.HAND_CART.get(), containerId, inventory, this);
     }
 }

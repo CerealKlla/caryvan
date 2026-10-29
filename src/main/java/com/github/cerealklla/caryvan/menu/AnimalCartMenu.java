@@ -1,5 +1,7 @@
 package com.github.cerealklla.caryvan.menu;
 
+import com.github.cerealklla.caryvan.entity.AbstractDrawnInventoryEntity;
+
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -104,6 +106,16 @@ public final class AnimalCartMenu extends AbstractContainerMenu {
             }
         }
         return clicked;
+    }
+
+    /** "Pick Up" button -- real user spec, 2026-10-29: no sneak+right-click pickup for any cart, a button is the only way. See {@code AbstractDrawnInventoryEntity#executePickUp}'s own doc. */
+    @Override
+    public boolean clickMenuButton(final Player player, final int id) {
+        if (id == AbstractDrawnInventoryEntity.PICK_UP_BUTTON_ID && this.container instanceof AbstractDrawnInventoryEntity cart) {
+            cart.executePickUp(player);
+            return true;
+        }
+        return super.clickMenuButton(player, id);
     }
 
     @Override

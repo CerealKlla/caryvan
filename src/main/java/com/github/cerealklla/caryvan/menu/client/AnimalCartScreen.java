@@ -1,9 +1,11 @@
 package com.github.cerealklla.caryvan.menu.client;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
+import com.github.cerealklla.caryvan.entity.AbstractDrawnInventoryEntity;
 import com.github.cerealklla.caryvan.menu.AnimalCartMenu;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -52,6 +54,15 @@ public final class AnimalCartScreen extends AbstractContainerScreen<AnimalCartMe
         // shift both to sit over the cargo panel instead.
         this.titleLabelX = CARGO_PANEL_X + 8;
         this.inventoryLabelX = CARGO_PANEL_X + 8;
+    }
+
+    /** "Pick Up" button, real user spec, 2026-10-29 -- see {@code AnimalCartMenu}'s own doc. First-pass position directly below the mount panel, not yet checked against a live screenshot. */
+    @Override
+    protected void init() {
+        super.init();
+        this.addRenderableWidget(Button.builder(Component.literal("Pick Up"), b ->
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, AbstractDrawnInventoryEntity.PICK_UP_BUTTON_ID))
+                .bounds(this.leftPos, this.topPos + MOUNT_PANEL_Y_OFFSET + MOUNT_PANEL_SIZE + GAP, CARGO_PANEL_X, 20).build());
     }
 
     @Override

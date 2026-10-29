@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.item.AnimalCartItem;
+import com.github.cerealklla.caryvan.item.BrokenCartItem;
 import com.github.cerealklla.caryvan.item.BrokenWheelItem;
 import com.github.cerealklla.caryvan.item.CarriageItem;
 import com.github.cerealklla.caryvan.item.HandCartItem;
@@ -116,9 +117,9 @@ public final class ModItems {
     // Deliberately NOT one-per-wood -- a wrecked cart no longer carries its original wood identity
     // (the repair recipe restores it, picked by whichever wood's Wheels are used to fix it).
     public static final DeferredItem<Item> BROKEN_HAND_CART = ITEMS.register(
-            "broken_hand_cart", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
+            "broken_hand_cart", id -> new BrokenCartItem(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
     public static final DeferredItem<Item> BROKEN_ANIMAL_CART = ITEMS.register(
-            "broken_animal_cart", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
+            "broken_animal_cart", id -> new BrokenCartItem(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
     public static final DeferredItem<Item> BROKEN_WAGON = ITEMS.register(
             "broken_wagon", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
     public static final DeferredItem<Item> BROKEN_CARRIAGE = ITEMS.register(

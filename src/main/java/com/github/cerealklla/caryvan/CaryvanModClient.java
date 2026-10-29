@@ -15,6 +15,7 @@ import com.github.cerealklla.caryvan.client.renderer.entity.model.WagonModel;
 import com.github.cerealklla.caryvan.menu.client.AnimalCartScreen;
 import com.github.cerealklla.caryvan.menu.client.CarriageScreen;
 import com.github.cerealklla.caryvan.menu.client.ConfirmActionScreen;
+import com.github.cerealklla.caryvan.menu.client.HandCartScreen;
 import com.github.cerealklla.caryvan.menu.client.WagonScreen;
 import com.github.cerealklla.caryvan.network.ConfirmCartPickUpPayload;
 import com.github.cerealklla.caryvan.network.ConfirmSlotRemovalPayload;
@@ -141,6 +142,7 @@ public class CaryvanModClient {
     @SubscribeEvent
     static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenus.ANIMAL_CART.get(), AnimalCartScreen::new);
+        event.register(ModMenus.HAND_CART.get(), HandCartScreen::new);
         event.register(ModMenus.WAGON.get(), WagonScreen::new);
         event.register(ModMenus.CARRIAGE.get(), CarriageScreen::new);
         event.register(ModMenus.WAINWRIGHT_STATION.get(), WainwrightStationScreen::new);

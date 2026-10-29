@@ -2,6 +2,7 @@ package com.github.cerealklla.caryvan.entity;
 
 import net.minecraft.core.NonNullList;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -148,5 +149,42 @@ public abstract class AbstractDrawnInventoryEntity extends AbstractDrawnEntity i
     protected void addAdditionalSaveData(final ValueOutput output) {
         super.addAdditionalSaveData(output);
         this.addChestVehicleSaveData(output);
+    }
+
+    /**
+     * Real user spec, 2026-10-29: Hand Cart/Animal Cart deliberately have no HP/repair system (that's
+     * Wagon/Carriage-only) and no sneak+right-click pickup either -- "we have a button in the
+     * inventory, that's the only way it should be done." Mirrors {@code
+     * AbstractDamageableDrawnEntity#executePickUp}'s own shape (spill cargo, give back the intact
+     * item, discard) but much simpler: no ownership (this hierarchy has never tracked one) and no
+     * broken-state branch (this hierarchy has no HP, so {@link #getCartItem()} is always the result).
+     */
+    public static final int PICK_UP_BUTTON_ID = 0;
+
+    public void executePickUp(final Player player) {
+        if (!(this.level() instanceof ServerLevel level)) {
+            return;
+        }
+        this.dumpCargoOnPickUp(level);
+        final ItemStack result = new ItemStack(this.getCartItem());
+        if (!player.getInventory().add(result)) {
+            this.spawnAtLocation(level, result);
+        }
+        this.discard();
+    }
+
+    /** Same Yconomics-Loot-Bag-or-plain-vanilla-drop shape {@code AbstractDamageableDrawnInventoryEntity#dumpCargoOnPickUp} already uses. */
+    protected void dumpCargoOnPickUp(final ServerLevel level) {
+        if (com.github.cerealklla.caryvan.bridge.YconomicsLootBagBridge.isLoaded()) {
+            final Vec3 pos = this.position();
+            for (final ItemStack stack : this.getItemStacks()) {
+                if (!stack.isEmpty()) {
+                    com.github.cerealklla.caryvan.bridge.YconomicsLootBagBridge.depositOrScatter(level, pos, stack);
+                }
+            }
+            this.clearItemStacks();
+        } else {
+            Containers.dropContents(level, this, this);
+        }
     }
 }

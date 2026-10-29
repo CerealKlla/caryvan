@@ -3,6 +3,7 @@ package com.github.cerealklla.caryvan.registration;
 import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.menu.AnimalCartMenu;
 import com.github.cerealklla.caryvan.menu.CarriageMenu;
+import com.github.cerealklla.caryvan.menu.HandCartMenu;
 import com.github.cerealklla.caryvan.menu.WagonMenu;
 import com.github.cerealklla.caryvan.wainwright.WainwrightStationMenu;
 
@@ -24,6 +25,10 @@ public final class ModMenus {
     public static final DeferredHolder<MenuType<?>, MenuType<AnimalCartMenu>> ANIMAL_CART = MENU_TYPES.register(
             "animal_cart",
             () -> IMenuTypeExtension.create((windowId, inventory, extraData) -> new AnimalCartMenu(null, windowId, inventory)));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<HandCartMenu>> HAND_CART = MENU_TYPES.register(
+            "hand_cart",
+            () -> IMenuTypeExtension.create((windowId, inventory, extraData) -> new HandCartMenu(null, windowId, inventory)));
 
     public static final DeferredHolder<MenuType<?>, MenuType<WagonMenu>> WAGON = MENU_TYPES.register(
             "wagon",
