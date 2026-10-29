@@ -964,11 +964,30 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         final float sin = Mth.sin(yawRad);
         final float cos = Mth.cos(yawRad);
         final Vec3 direction = new Vec3(-sin * forward - cos * strafe, 0.0D, cos * forward - sin * strafe).normalize();
-        double speed = STEER_SPEED_FALLBACK;
+        this.leadMount.move(MoverType.SELF, direction.scale(teamSpeed()));
+    }
+
+    /**
+     * Real user request, 2026-10-29: "I want the wagon's max speed to be set to the average of all
+     * the pulling horses, not just the fastest" -- steering speed used to come from {@link
+     * #leadMount}'s own {@code Attributes.MOVEMENT_SPEED} alone, with {@link #teamMount}'s speed
+     * never factored in at all (it only ever follows via its own leash physics, see {@link
+     * #syncTeamFollow()}). Now averages every alive, {@code LivingEntity} mount actually present
+     * (just {@link #leadMount} for a lone horse, both for a full team) -- {@link
+     * #STEER_SPEED_FALLBACK} still applies if neither mount is a {@code LivingEntity} at all.
+     */
+    private double teamSpeed() {
+        double total = 0.0D;
+        int count = 0;
         if (this.leadMount instanceof LivingEntity livingLead) {
-            speed = livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED) * 2.0D;
+            total += livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED);
+            count++;
         }
-        this.leadMount.move(MoverType.SELF, direction.scale(speed));
+        if (this.teamMount != null && this.teamMount.isAlive() && this.teamMount instanceof LivingEntity livingTeam) {
+            total += livingTeam.getAttributeValue(Attributes.MOVEMENT_SPEED);
+            count++;
+        }
+        return count == 0 ? STEER_SPEED_FALLBACK : (total / count) * 2.0D;
     }
 
     /**
