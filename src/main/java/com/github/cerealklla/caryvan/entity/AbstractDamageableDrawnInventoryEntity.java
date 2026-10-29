@@ -174,30 +174,59 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
         }
         boolean repairedAnything = false;
         if (this.getBrokenWheelCount() > 0) {
-            final net.minecraft.world.item.Item wheelsItem = com.github.cerealklla.caryvan.registration.ModItems.wheelsFor(this.getWoodType());
-            int available = 0;
+            // Real live-test bugs, 2026-10-28: this used to only accept Wheels matching the cart's
+            // own BODY species (`ModItems.wheelsFor(this.getWoodType())`) -- never updated when the
+            // same day's "Wagon Repair can use a different wheel species" change widened the
+            // right-click world interaction (WagonEntity#use) to accept ANY real Wheels item via
+            // ModItems#woodTypeForWheelsItem, leaving this GUI "Repair" button (the one players
+            // actually use, since it reads cargo instead of the held item) still rejecting anything
+            // not matching the body -- "it would not repair because I didn't have the needed
+            // materials" despite real Wheels sitting in cargo. Separately, even a same-species repair
+            // here always called the plain 1-arg #repair(int) overload, which passes {@code
+            // newSpecies = null} -- so a wheel that had been re-colored to a DIFFERENT species by an
+            // earlier right-click repair stayed visually that old species forever, even once
+            // genuinely repaired with matching-body-species Wheels ("it repaired the wheel but the
+            // wheel still looks like a birch wheel"). Fixed by scanning cargo for every real Wheels
+            // species present (not just the body's own) and repairing one species-batch at a time,
+            // passing that species into #repair(int, WoodType) so a freshly-fixed wheel always
+            // re-colors to whatever Wheels item actually fixed it -- exactly matching the right-click
+            // path's own behavior.
+            final java.util.Map<net.minecraft.world.level.block.state.properties.WoodType, Integer> availableBySpecies =
+                    new java.util.HashMap<>();
             for (int i = 0; i < this.getContainerSize(); i++) {
                 final ItemStack stack = this.getItem(i);
-                if (stack.getItem() == wheelsItem) {
-                    available += stack.getCount();
+                if (stack.isEmpty()) {
+                    continue;
+                }
+                com.github.cerealklla.caryvan.registration.ModItems.woodTypeForWheelsItem(stack.getItem())
+                        .ifPresent(species -> availableBySpecies.merge(species, stack.getCount(), Integer::sum));
+            }
+            int totalFixed = 0;
+            for (final var entry : availableBySpecies.entrySet()) {
+                if (this.getBrokenWheelCount() <= 0) {
+                    break;
+                }
+                final net.minecraft.world.level.block.state.properties.WoodType species = entry.getKey();
+                final int fixed = this.repair(entry.getValue(), species);
+                if (fixed <= 0) {
+                    continue;
+                }
+                totalFixed += fixed;
+                final net.minecraft.world.item.Item wheelsItem = com.github.cerealklla.caryvan.registration.ModItems.wheelsFor(species);
+                int remaining = fixed;
+                for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+                    final ItemStack stack = this.getItem(i);
+                    if (stack.getItem() == wheelsItem) {
+                        final int take = Math.min(remaining, stack.getCount());
+                        stack.shrink(take);
+                        remaining -= take;
+                    }
                 }
             }
-            if (available > 0) {
-                final int fixed = this.repair(available);
-                if (fixed > 0) {
-                    repairedAnything = true;
-                    int remaining = fixed;
-                    for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
-                        final ItemStack stack = this.getItem(i);
-                        if (stack.getItem() == wheelsItem) {
-                            final int take = Math.min(remaining, stack.getCount());
-                            stack.shrink(take);
-                            remaining -= take;
-                        }
-                    }
-                    player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
-                            "Repaired " + fixed + " wheel" + (fixed == 1 ? "" : "s") + "."));
-                }
+            if (totalFixed > 0) {
+                repairedAnything = true;
+                player.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                        "Repaired " + totalFixed + " wheel" + (totalFixed == 1 ? "" : "s") + "."));
             }
         }
         if (repairAdditionalParts(player)) {
