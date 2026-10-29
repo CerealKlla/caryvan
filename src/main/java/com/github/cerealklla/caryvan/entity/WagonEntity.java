@@ -10,6 +10,9 @@ import com.github.cerealklla.caryvan.registration.ModAttachments;
 import com.github.cerealklla.caryvan.registration.ModItems;
 import com.github.cerealklla.caryvan.registration.ModMenus;
 
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -150,8 +153,80 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
     private static final double TEAM_FOLLOW_SPACING = 3.0D;
     private static final double TEAM_CATCH_UP_RATE = 0.6D;
 
+    /**
+     * Real user spec, 2026-10-29: "I want the wagon's max speed to be set to the average of all the
+     * pulling horses, not just the fastest" -- followed up the same conversation with the full
+     * formula below. {@code BaseMaxSpeed} is 90% of the average of every alive, real-{@code
+     * LivingEntity} mount's own {@code Attributes.MOVEMENT_SPEED}; the actual current Max Speed then
+     * loses up to {@link #LOAD_SPEED_PENALTY} (40%) as the cart fills up, scaled by how full it is.
+     * "Full" counts filled cargo slots (ignoring stack size, per the spec -- a slot with 1 item
+     * counts the same as a full stack) plus occupied bench seats, out of the cart's real total
+     * capacity (cargo slots + 2 seats) -- {@link #MOUNT_SLOT_COUNT_OFFSET}/seat occupancy are both
+     * counted toward load, matching the explicit "this includes every player sitting on the wagon"
+     * spec. Synced via {@link #DATA_MAX_SPEED} so {@code menu.client.WagonScreen} can display the
+     * real current value without needing a live reference to this entity to query it directly.
+     */
+    private static final double BASE_SPEED_FRACTION = 0.9D;
+    private static final double LOAD_SPEED_PENALTY = 0.4D;
+    private static final int MOUNT_SLOT_COUNT_OFFSET = WagonMenu.MOUNT_SLOT_COUNT + WagonMenu.COMPANION_SLOT_COUNT;
+    private static final int SEAT_CAPACITY = 2;
+    private static final EntityDataAccessor<Float> DATA_MAX_SPEED =
+            SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.FLOAT);
+
     public WagonEntity(final EntityType<? extends WagonEntity> entityType, final Level level) {
         super(entityType, level, WagonMenu.CONTAINER_SIZE);
+    }
+
+    @Override
+    protected void defineSynchedData(final SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_MAX_SPEED, 0.0F);
+    }
+
+    /** Whatever {@link #recalculateMaxSpeed()} most recently computed -- for {@code menu.client.WagonScreen}'s own display, and real client/server consistency (both sides read this exact synced value, no duplicate computation). */
+    public double getMaxSpeed() {
+        return this.entityData.get(DATA_MAX_SPEED);
+    }
+
+    /**
+     * Recomputes and re-syncs {@link #DATA_MAX_SPEED} -- called explicitly on the three real trigger
+     * points the spec calls out (seat mount in {@link #interact}, seat dismount in {@link
+     * #validateSeatOccupants}, cargo change via {@link #setChanged}) rather than every tick, matching
+     * this suite's own standing "an event trigger beats tick-polling" convention.
+     */
+    private void recalculateMaxSpeed() {
+        double speedTotal = 0.0D;
+        int mountCount = 0;
+        if (this.leadMount instanceof LivingEntity livingLead) {
+            speedTotal += livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED);
+            mountCount++;
+        }
+        if (this.teamMount != null && this.teamMount.isAlive() && this.teamMount instanceof LivingEntity livingTeam) {
+            speedTotal += livingTeam.getAttributeValue(Attributes.MOVEMENT_SPEED);
+            mountCount++;
+        }
+        final double baseMaxSpeed = mountCount == 0 ? 0.0D : (speedTotal / mountCount) * BASE_SPEED_FRACTION;
+
+        int filledCargoSlots = 0;
+        for (int i = MOUNT_SLOT_COUNT_OFFSET; i < this.getContainerSize(); i++) {
+            if (!this.getItem(i).isEmpty()) {
+                filledCargoSlots++;
+            }
+        }
+        final int cargoSlotCount = this.getContainerSize() - MOUNT_SLOT_COUNT_OFFSET;
+        final int occupiedSeats = (this.leftSeatOccupant != null ? 1 : 0) + (this.rightSeatOccupant != null ? 1 : 0);
+        final int totalCapacity = cargoSlotCount + SEAT_CAPACITY;
+        final double loadFraction = totalCapacity <= 0 ? 0.0D : (double) (filledCargoSlots + occupiedSeats) / totalCapacity;
+
+        final double currentMaxSpeed = baseMaxSpeed * (1.0D - LOAD_SPEED_PENALTY * loadFraction);
+        this.entityData.set(DATA_MAX_SPEED, (float) currentMaxSpeed);
+    }
+
+    /** The real "cargo changed" trigger point -- see {@link #recalculateMaxSpeed()}'s own doc for why this (not a per-tick scan) is the right hook. */
+    @Override
+    public void setChanged() {
+        super.setChanged();
+        this.recalculateMaxSpeed();
     }
 
     /** Registered in {@code CaryvanMod#registerAttributes} -- mirrors {@code GuardKitStandEntity}'s own real {@code ArmorStand.createAttributes()} precedent for a {@code LivingEntity} subclass. */
@@ -280,9 +355,11 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
     private void validateSeatOccupants() {
         if (this.leftSeatOccupant != null && !this.hasPassenger(this.leftSeatOccupant)) {
             this.leftSeatOccupant = null;
+            recalculateMaxSpeed();
         }
         if (this.rightSeatOccupant != null && !this.hasPassenger(this.rightSeatOccupant)) {
             this.rightSeatOccupant = null;
+            recalculateMaxSpeed();
         }
     }
 
@@ -299,6 +376,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         if (this.leadMount != null && !stoneClaims(LEAD_SLOT, this.leadMount)) {
             this.leadMount.discard();
             this.leadMount = null;
+            recalculateMaxSpeed();
         }
         final ItemStack stone = this.getItem(LEAD_SLOT);
         if (stone.isEmpty() || !LyfeSummoningBridge.isLoaded()) {
@@ -327,6 +405,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
             if (this.leadMount != mount) {
                 prepareCartMount(mount);
                 this.leadMount = mount;
+                recalculateMaxSpeed();
             }
         }
     }
@@ -336,6 +415,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         if (this.teamMount != null && !stoneClaims(TEAM_SLOT, this.teamMount)) {
             this.teamMount.discard();
             this.teamMount = null;
+            recalculateMaxSpeed();
         }
         final ItemStack stone = this.getItem(TEAM_SLOT);
         if (stone.isEmpty() || !LyfeSummoningBridge.isLoaded()) {
@@ -358,6 +438,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
             if (this.teamMount != mount) {
                 prepareCartMount(mount);
                 this.teamMount = mount;
+                recalculateMaxSpeed();
             }
         }
     }
@@ -809,6 +890,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
             CaryvanMod.LOGGER.info("[cart-mount-debug] assigned {} to {} seat", player.getName().getString(),
                     player == this.leftSeatOccupant ? "LEFT" : "RIGHT");
             player.startRiding(this, true, true);
+            recalculateMaxSpeed();
             return InteractionResult.SUCCESS;
         }
         return super.interact(player, hand, location);
@@ -964,30 +1046,8 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         final float sin = Mth.sin(yawRad);
         final float cos = Mth.cos(yawRad);
         final Vec3 direction = new Vec3(-sin * forward - cos * strafe, 0.0D, cos * forward - sin * strafe).normalize();
-        this.leadMount.move(MoverType.SELF, direction.scale(teamSpeed()));
-    }
-
-    /**
-     * Real user request, 2026-10-29: "I want the wagon's max speed to be set to the average of all
-     * the pulling horses, not just the fastest" -- steering speed used to come from {@link
-     * #leadMount}'s own {@code Attributes.MOVEMENT_SPEED} alone, with {@link #teamMount}'s speed
-     * never factored in at all (it only ever follows via its own leash physics, see {@link
-     * #syncTeamFollow()}). Now averages every alive, {@code LivingEntity} mount actually present
-     * (just {@link #leadMount} for a lone horse, both for a full team) -- {@link
-     * #STEER_SPEED_FALLBACK} still applies if neither mount is a {@code LivingEntity} at all.
-     */
-    private double teamSpeed() {
-        double total = 0.0D;
-        int count = 0;
-        if (this.leadMount instanceof LivingEntity livingLead) {
-            total += livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED);
-            count++;
-        }
-        if (this.teamMount != null && this.teamMount.isAlive() && this.teamMount instanceof LivingEntity livingTeam) {
-            total += livingTeam.getAttributeValue(Attributes.MOVEMENT_SPEED);
-            count++;
-        }
-        return count == 0 ? STEER_SPEED_FALLBACK : (total / count) * 2.0D;
+        final double speed = this.getMaxSpeed();
+        this.leadMount.move(MoverType.SELF, direction.scale(speed > 0.0D ? speed : STEER_SPEED_FALLBACK));
     }
 
     /**

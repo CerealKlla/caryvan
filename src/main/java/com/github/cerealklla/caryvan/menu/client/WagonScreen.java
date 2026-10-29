@@ -1,7 +1,10 @@
 package com.github.cerealklla.caryvan.menu.client;
 
+import java.util.Comparator;
+
 import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity;
+import com.github.cerealklla.caryvan.entity.WagonEntity;
 import com.github.cerealklla.caryvan.menu.WagonMenu;
 
 import net.minecraft.ChatFormatting;
@@ -40,11 +43,31 @@ public final class WagonScreen extends AbstractContainerScreen<WagonMenu> {
     private static final int TOP_PANEL_HEIGHT = WagonMenu.CARGO_ROWS * 18 + 17;
     private static final int PLAYER_INV_HEIGHT = 96;
 
+    // Real user spec, 2026-10-29: Max Speed is a real, live-recalculated stat (see WagonEntity's own
+    // doc) that should be visible right on this screen. Client-side menu reconstruction has no live
+    // entity reference at all (see WagonMenu's own doc on why its own `container` is a dummy
+    // SimpleContainer here) -- but the viewing player is necessarily standing right next to the real
+    // Wagon to have opened this screen, so the nearest one is resolved once at init time purely for
+    // this display line, never for anything that needs to be authoritative.
+    private WagonEntity cartEntity;
+
     public WagonScreen(final WagonMenu menu, final Inventory inventory, final Component title) {
         super(menu, inventory, title, CARGO_PANEL_X + 176, TOP_PANEL_HEIGHT + PLAYER_INV_HEIGHT);
         this.inventoryLabelY = this.imageHeight - 94;
         this.titleLabelX = CARGO_PANEL_X + 8;
         this.inventoryLabelX = CARGO_PANEL_X + 8;
+    }
+
+    private int mountButtonAreaY() {
+        return this.topPos + MOUNT_PANEL_Y_OFFSET + MOUNT_PANEL_HEIGHT + 4;
+    }
+
+    private WagonEntity resolveCartEntity() {
+        if (this.minecraft == null || this.minecraft.player == null || this.minecraft.level == null) {
+            return null;
+        }
+        return this.minecraft.level.getEntitiesOfClass(WagonEntity.class, this.minecraft.player.getBoundingBox().inflate(8.0))
+                .stream().min(Comparator.comparingDouble(e -> e.distanceToSqr(this.minecraft.player))).orElse(null);
     }
 
     /**
@@ -66,8 +89,9 @@ public final class WagonScreen extends AbstractContainerScreen<WagonMenu> {
     @Override
     protected void init() {
         super.init();
+        this.cartEntity = resolveCartEntity();
         final int buttonX = this.leftPos;
-        final int buttonY = this.topPos + MOUNT_PANEL_Y_OFFSET + MOUNT_PANEL_HEIGHT + 4;
+        final int buttonY = mountButtonAreaY();
         this.addRenderableWidget(Button.builder(Component.literal("Repair"), b ->
                 this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, AbstractDamageableDrawnEntity.REPAIR_BUTTON_ID))
                 .bounds(buttonX, buttonY, MOUNT_PANEL_WIDTH, 20).build());
@@ -81,6 +105,10 @@ public final class WagonScreen extends AbstractContainerScreen<WagonMenu> {
         graphics.blit(RenderPipelines.GUI_TEXTURED, MOUNT_PANEL, this.leftPos, this.topPos + MOUNT_PANEL_Y_OFFSET, 0.0F, 0.0F, MOUNT_PANEL_WIDTH, MOUNT_PANEL_HEIGHT, MOUNT_PANEL_WIDTH, MOUNT_PANEL_HEIGHT);
         graphics.blit(RenderPipelines.GUI_TEXTURED, CARGO_BACKGROUND, this.leftPos + CARGO_PANEL_X, this.topPos, 0.0F, 0.0F, 176, TOP_PANEL_HEIGHT, 256, 256);
         graphics.blit(RenderPipelines.GUI_TEXTURED, CARGO_BACKGROUND, this.leftPos + CARGO_PANEL_X, this.topPos + TOP_PANEL_HEIGHT, 0.0F, 126.0F, 176, PLAYER_INV_HEIGHT, 256, 256);
+        if (this.cartEntity != null) {
+            final String speedText = String.format("Max Speed: %.3f", this.cartEntity.getMaxSpeed());
+            graphics.text(this.font, Component.literal(speedText), this.leftPos, mountButtonAreaY() + 48, 0xFFFFFFFF, false);
+        }
     }
 
     @Override
