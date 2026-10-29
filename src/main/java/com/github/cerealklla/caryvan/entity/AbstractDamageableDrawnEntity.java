@@ -80,9 +80,19 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     private static final double CATCH_UP_RATE = 0.2D;
 
     private static final long RECENTLY_DAMAGED_MILLIS = 5L * 60L * 1000L;
+    // Real bug, found live 2026-10-29: "I replaced 2 wheels at once on this wagon and it never
+    // healed to full hp." Root cause -- healPerTick used to be a FLAT total ("heal 25% of base over
+    // this window", hardcoded for the single-wheel case, i.e. 1/wheelCount for a 4-wheel Wagon) no
+    // matter how many wheels a single #repair call actually fixed, so repairing 2+ wheels at once
+    // raised the healing ceiling (getTempMaxHealthCeiling) by 2+ wheels' worth but the window still
+    // only ever delivered 1 wheel's worth of total healing before closing -- current health got
+    // permanently stuck below the new ceiling with no further healing ever happening. Real user
+    // spec for the fix: "if I added 2 at once, that buff should have been twice as long to heal
+    // 50%" -- i.e. the heal RATE (1 wheel's worth of base HP per PASSIVE_REPAIR_MILLIS) is the true
+    // constant, not the window's total duration; #repair now extends this window by
+    // {@code wheelsFixed * PASSIVE_REPAIR_MILLIS} instead of resetting it to one flat length,
+    // guaranteeing enough total time to actually reach whatever ceiling this repair just unlocked.
     private static final long PASSIVE_REPAIR_MILLIS = 5L * 60L * 1000L;
-    /** "healing up to 25% of the wagons' Max HP" over the 5-minute Passive Repair window -- real user spec. */
-    private static final float PASSIVE_REPAIR_FRACTION_OF_BASE = 0.25F;
 
     private static final EntityDataAccessor<String> DATA_WOOD_TYPE =
             SynchedEntityData.defineId(AbstractDamageableDrawnEntity.class, EntityDataSerializers.STRING);
@@ -543,7 +553,11 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
                 // never touched here at all, only #repair(int) ever lowers it.
                 final float tempMaxCeiling = getTempMaxHealthCeiling();
                 if (this.getHealth() < tempMaxCeiling) {
-                    final float healPerTick = (PASSIVE_REPAIR_FRACTION_OF_BASE * this.getBaseMaxHealth()) / (PASSIVE_REPAIR_MILLIS / 50L);
+                    // One wheel's worth of base HP (base / wheelCount), healed over exactly one
+                    // PASSIVE_REPAIR_MILLIS window -- see this class's own field doc above for why
+                    // this must be a true constant rate, not a flat total.
+                    final int wheelCount = Math.max(1, this.wheels.size());
+                    final float healPerTick = (this.getBaseMaxHealth() / wheelCount) / (PASSIVE_REPAIR_MILLIS / 50L);
                     // Explicitly clamped to the ceiling -- setHealth() alone only clamps to the real,
                     // unchanging max-health attribute, which is no longer narrow enough to rely on.
                     this.setHealth(Math.min(this.getHealth() + healPerTick, tempMaxCeiling));
@@ -637,8 +651,14 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             }
             this.brokenWheelCount -= toFix;
             applyBrokenWheelCount();
+            // Real bug fix, 2026-10-29 (see this class's own PASSIVE_REPAIR_MILLIS doc) -- extends
+            // the window by one full PASSIVE_REPAIR_MILLIS per wheel just fixed, from whichever is
+            // later (an already-active window's own remaining deadline, or now), instead of
+            // resetting to one flat length regardless of how many wheels this call actually fixed.
+            final long now = System.currentTimeMillis();
+            final long baseline = Math.max(this.passiveRepairUntilMillis, now);
+            this.passiveRepairUntilMillis = baseline + (long) toFix * PASSIVE_REPAIR_MILLIS;
         }
-        this.passiveRepairUntilMillis = System.currentTimeMillis() + PASSIVE_REPAIR_MILLIS;
         return toFix;
     }
 
