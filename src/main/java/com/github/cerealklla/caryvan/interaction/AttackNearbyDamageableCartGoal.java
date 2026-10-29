@@ -39,6 +39,27 @@ public final class AttackNearbyDamageableCartGoal extends Goal {
         return this.mob.getTarget() == null && findNearestCart() != null;
     }
 
+    /**
+     * Real live report, 2026-10-29: "enemy AI continue to target a wagon which has died." Root
+     * cause: {@link AbstractDamageableDrawnEntity#isAlive()} is deliberately overridden to stay
+     * {@code true} while Broken (0 HP) -- a Broken cart is never removed until Pick Up, by design,
+     * so vanilla's own usual "the target died, drop it" cleanup never fires; and this goal itself
+     * never revisited an already-set target at all ({@link #canUse()} only re-picks once {@code
+     * getTarget()} is already {@code null}). The initial pick in {@link #findNearestCart()} already
+     * excludes a Broken cart correctly ({@code getHealth() > 0.0F}) -- the real gap was a cart that
+     * breaks mid-fight never getting dropped afterward. Clearing the target here (not just returning
+     * {@code false}) matters -- otherwise the mob would stay frozen rather than going back to {@link
+     * #canUse()} and finding something else to do.
+     */
+    @Override
+    public boolean canContinueToUse() {
+        if (this.mob.getTarget() instanceof AbstractDamageableDrawnEntity cart && cart.isBroken()) {
+            this.mob.setTarget(null);
+            return false;
+        }
+        return this.mob.getTarget() != null;
+    }
+
     @Override
     public void start() {
         final LivingEntity cart = findNearestCart();
@@ -50,7 +71,7 @@ public final class AttackNearbyDamageableCartGoal extends Goal {
     private LivingEntity findNearestCart() {
         final AABB box = this.mob.getBoundingBox().inflate(RANGE_BLOCKS);
         final List<AbstractDamageableDrawnEntity> candidates = this.mob.level()
-                .getEntitiesOfClass(AbstractDamageableDrawnEntity.class, box, cart -> cart.getHealth() > 0.0F && cart.isAlive());
+                .getEntitiesOfClass(AbstractDamageableDrawnEntity.class, box, cart -> !cart.isBroken() && cart.isAlive());
         LivingEntity nearest = null;
         double nearestDistSq = Double.MAX_VALUE;
         for (final AbstractDamageableDrawnEntity candidate : candidates) {
