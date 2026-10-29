@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.github.cerealklla.caryvan.CaryvanMod;
 import com.github.cerealklla.caryvan.item.AnimalCartItem;
+import com.github.cerealklla.caryvan.item.BrokenWheelItem;
 import com.github.cerealklla.caryvan.item.CarriageItem;
 import com.github.cerealklla.caryvan.item.HandCartItem;
 import com.github.cerealklla.caryvan.item.WagonItem;
@@ -125,7 +126,7 @@ public final class ModItems {
     // A single generic item (not per-wood, not per-cart-type) -- a broken wheel is just scrap either
     // way, whichever cart it came from.
     public static final DeferredItem<Item> BROKEN_WHEEL = ITEMS.register(
-            "broken_wheel", id -> new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
+            "broken_wheel", id -> new BrokenWheelItem(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, id))));
 
     public static Item handCartFor(final WoodType woodType) {
         return HAND_CARTS.get(woodType).get();
