@@ -45,7 +45,14 @@ public final class WainwrightPreviewStorage {
     // v3, 2026-10-28: the v2 geometry port itself rendered upside down (missing the standard
     // vanilla entity-model orientation correction, see CaryvanImager's own decisions.md) -- bumped
     // again so clients don't keep showing the now-fixed-server-side-but-still-cached-wrong v2 images.
-    private static final String GEOMETRY_VERSION = "v3";
+    // v4, 2026-10-28: the v3 fix above was real and correct in the source, but the standalone
+    // CaryvanImager *process* already running on Production had been started before that fix was
+    // ever built, so it kept silently rendering the old upside-down geometry under the "v3" key --
+    // restarting that process fixed the server-side file, but every client that had already fetched
+    // the broken v3 image under its old identity kept it cached forever (by design, see this field's
+    // own doc above), with no way to tell it had changed. Bumping the key is what actually forces a
+    // re-fetch -- restarting the renderer process alone never touches an already-cached client.
+    private static final String GEOMETRY_VERSION = "v4";
 
     public static String keyFor(final String type, final String bodySpecies, final String wheelSpecies) {
         return GEOMETRY_VERSION + "_" + type + "_" + bodySpecies + "_" + wheelSpecies;
