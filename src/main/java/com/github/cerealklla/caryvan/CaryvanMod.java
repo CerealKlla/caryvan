@@ -4,6 +4,7 @@ import com.github.cerealklla.caryvan.interaction.CartMountDeathListener;
 import com.github.cerealklla.caryvan.interaction.CartMountDebugListener;
 import com.github.cerealklla.caryvan.interaction.CartMountInteractionListener;
 import com.github.cerealklla.caryvan.interaction.DamageableCartTargetingListener;
+import com.github.cerealklla.caryvan.interaction.WagonRiderInventoryListener;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.recipe.CarriageCraftingGate;
 import com.github.cerealklla.caryvan.registration.ModAttachments;
@@ -72,6 +73,10 @@ public class CaryvanMod {
         // not ready for players to craft. Removes the crafting recipe only; entity/item/renderer
         // code and the repair recipes are untouched -- see that class's own doc.
         NeoForge.EVENT_BUS.register(new CarriageCraftingGate());
+        // Wagon Max Speed depends partly on a riding player's own inventory fullness, 2026-10-29 --
+        // recalculated off every real discrete event that could change it, never a tick poll. See
+        // that class's own doc.
+        NeoForge.EVENT_BUS.register(new WagonRiderInventoryListener());
 
         // Replaces manually crafting/finding a Hand Cart while testing -- contributed into Kyt's
         // mod-managed "Dev" Kyt (/kyt getDev), same pattern Blueprynts/Settlemynts already use for

@@ -159,17 +159,35 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
      * formula below. {@code BaseMaxSpeed} is 90% of the average of every alive, real-{@code
      * LivingEntity} mount's own {@code Attributes.MOVEMENT_SPEED}; the actual current Max Speed then
      * loses up to {@link #LOAD_SPEED_PENALTY} (40%) as the cart fills up, scaled by how full it is.
-     * "Full" counts filled cargo slots (ignoring stack size, per the spec -- a slot with 1 item
-     * counts the same as a full stack) plus occupied bench seats, out of the cart's real total
-     * capacity (cargo slots + 2 seats) -- {@link #MOUNT_SLOT_COUNT_OFFSET}/seat occupancy are both
-     * counted toward load, matching the explicit "this includes every player sitting on the wagon"
-     * spec. Synced via {@link #DATA_MAX_SPEED} so {@code menu.client.WagonScreen} can display the
-     * real current value without needing a live reference to this entity to query it directly.
+     *
+     * <p><b>Corrected the same day</b> -- the original version treated a player sitting in a bench
+     * seat as a flat +1 toward load, regardless of what they're carrying. Real spec: "add the
+     * player's inventory to the wagon and then set the max speed based on the % of 'used' item
+     * slots... every player's weight is adding to the weight in the wagon" -- each seat currently
+     * occupied by a real {@link Player} (a Companion occupying a seat has no inventory, contributes
+     * nothing) pools its own 27 main-storage inventory slots (hotbar and armor/offhand excluded,
+     * same {@code MAIN_INVENTORY_START=9}/{@code MAIN_INVENTORY_END=36} range Wainwright Station's
+     * own crafting scan already established as this mod's convention) into both the "used slots" and
+     * "total capacity" side of the load fraction, alongside the cart's own cargo slots ("full" still
+     * ignores stack size, per the original spec -- a slot with 1 item counts the same as a full
+     * stack). Since a rider's own inventory contents can change through many different real actions
+     * with no single generic "inventory changed" event behind any of them (confirmed against the
+     * real decompiled source -- {@code Inventory#setChanged} is a bare counter, posts nothing),
+     * explicit user correction, 2026-10-29: "Don't add ticks like that. There are events for the
+     * inventory changing, only fire the recalculation when those events fire." See {@code
+     * interaction.WagonRiderInventoryListener} for the real discrete events (pickup, container
+     * close, crafting, smelting, item consumption, equipment change) that each call {@link
+     * #recalculateMaxSpeed()} directly when the player involved is riding this Wagon -- no tick
+     * polling at all. Synced via {@link #DATA_MAX_SPEED} so {@code menu.client.WagonScreen} can
+     * display the real current value without needing a live reference to this entity to query it
+     * directly.
      */
     private static final double BASE_SPEED_FRACTION = 0.9D;
     private static final double LOAD_SPEED_PENALTY = 0.4D;
     private static final int MOUNT_SLOT_COUNT_OFFSET = WagonMenu.MOUNT_SLOT_COUNT + WagonMenu.COMPANION_SLOT_COUNT;
-    private static final int SEAT_CAPACITY = 2;
+    private static final int RIDER_MAIN_INVENTORY_START = 9;
+    private static final int RIDER_MAIN_INVENTORY_END = 36;
+    private static final int RIDER_INVENTORY_SLOT_COUNT = RIDER_MAIN_INVENTORY_END - RIDER_MAIN_INVENTORY_START;
     private static final EntityDataAccessor<Float> DATA_MAX_SPEED =
             SynchedEntityData.defineId(WagonEntity.class, EntityDataSerializers.FLOAT);
 
@@ -189,12 +207,12 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
     }
 
     /**
-     * Recomputes and re-syncs {@link #DATA_MAX_SPEED} -- called explicitly on the three real trigger
-     * points the spec calls out (seat mount in {@link #interact}, seat dismount in {@link
-     * #validateSeatOccupants}, cargo change via {@link #setChanged}) rather than every tick, matching
-     * this suite's own standing "an event trigger beats tick-polling" convention.
+     * Recomputes and re-syncs {@link #DATA_MAX_SPEED} -- called on seat mount ({@link #interact}),
+     * seat dismount ({@link #validateSeatOccupants}), cargo change ({@link #setChanged}), and (from
+     * outside this class, hence {@code public}) every real event {@code
+     * interaction.WagonRiderInventoryListener} covers for a riding player's own inventory.
      */
-    private void recalculateMaxSpeed() {
+    public void recalculateMaxSpeed() {
         double speedTotal = 0.0D;
         int mountCount = 0;
         if (this.leadMount instanceof LivingEntity livingLead) {
@@ -214,12 +232,34 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
             }
         }
         final int cargoSlotCount = this.getContainerSize() - MOUNT_SLOT_COUNT_OFFSET;
-        final int occupiedSeats = (this.leftSeatOccupant != null ? 1 : 0) + (this.rightSeatOccupant != null ? 1 : 0);
-        final int totalCapacity = cargoSlotCount + SEAT_CAPACITY;
-        final double loadFraction = totalCapacity <= 0 ? 0.0D : (double) (filledCargoSlots + occupiedSeats) / totalCapacity;
+
+        int riderUsedSlots = 0;
+        int riderCapacitySlots = 0;
+        for (final Entity seatOccupant : new Entity[]{this.leftSeatOccupant, this.rightSeatOccupant}) {
+            if (seatOccupant instanceof Player riderPlayer) {
+                riderCapacitySlots += RIDER_INVENTORY_SLOT_COUNT;
+                riderUsedSlots += countUsedRiderSlots(riderPlayer);
+            }
+        }
+
+        final int totalCapacity = cargoSlotCount + riderCapacitySlots;
+        final double loadFraction = totalCapacity <= 0 ? 0.0D
+                : (double) (filledCargoSlots + riderUsedSlots) / totalCapacity;
 
         final double currentMaxSpeed = baseMaxSpeed * (1.0D - LOAD_SPEED_PENALTY * loadFraction);
         this.entityData.set(DATA_MAX_SPEED, (float) currentMaxSpeed);
+    }
+
+    /** A rider's own 27 main-storage slots (hotbar/armor/offhand excluded) -- see {@link #recalculateMaxSpeed()}'s own doc. */
+    private static int countUsedRiderSlots(final Player rider) {
+        final Inventory inventory = rider.getInventory();
+        int used = 0;
+        for (int i = RIDER_MAIN_INVENTORY_START; i < RIDER_MAIN_INVENTORY_END; i++) {
+            if (!inventory.getItem(i).isEmpty()) {
+                used++;
+            }
+        }
+        return used;
     }
 
     /** The real "cargo changed" trigger point -- see {@link #recalculateMaxSpeed()}'s own doc for why this (not a per-tick scan) is the right hook. */
