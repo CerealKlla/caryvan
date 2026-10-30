@@ -537,7 +537,32 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
             // minutes" -- real user spec, automatic, not gated on the Repair button at all.
             this.recentlyDamagedUntilMillis = 0L;
             if (this.passiveRepairUntilMillis <= 0L) {
-                this.passiveRepairUntilMillis = now + PASSIVE_REPAIR_MILLIS;
+                // Real live-test bug, 2026-10-30: "This wagon is sitting at 95% healed and isn't
+                // healing anymore." This auto-triggered window used to always run for a flat
+                // PASSIVE_REPAIR_MILLIS, delivering exactly one wheel's worth of healing (the fixed
+                // rate below) no matter how much health was actually missing -- correct for the
+                // #repair(int)-driven window, which scales ITS OWN length by how many wheels were
+                // just fixed (see that method's own doc), but wrong here: gradual chip damage that
+                // never actually crosses a single wheel's break threshold (so #brokenWheelCount stays
+                // 0 and the ceiling stays the real full max) can still add up to MORE than one wheel's
+                // worth of missing health, and once this fixed window closed there was nothing left to
+                // ever restart it -- the cart was stuck below full forever unless it happened to take
+                // a fresh hit (manually re-triggering this same flow) to open a new one.
+                //
+                // Fixed the same way #repair(int) already scales its own window: measured once, right
+                // here, as "how much is actually missing right now" in wheel-equivalents, against the
+                // exact same constant heal-rate used below -- so the window runs exactly as long as it
+                // takes to close whatever gap genuinely exists, never more, never less, and a cart with
+                // only a small gap (like 5%) finishes in proportionally less time rather than needing
+                // the same fixed 5 minutes every time.
+                final float ceiling = getTempMaxHealthCeiling();
+                final float missing = ceiling - this.getHealth();
+                if (missing > 0.0F) {
+                    final int wheelCount = Math.max(1, this.wheels.size());
+                    final float onePerWheel = this.getBaseMaxHealth() / wheelCount;
+                    final double wheelEquivalentsMissing = missing / onePerWheel;
+                    this.passiveRepairUntilMillis = now + (long) Math.ceil(wheelEquivalentsMissing * (double) PASSIVE_REPAIR_MILLIS);
+                }
             }
         }
         if (this.passiveRepairUntilMillis > 0L) {
