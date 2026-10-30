@@ -813,26 +813,19 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
 
     @Override
     public InteractionResult interact(final Player player, final InteractionHand hand, final Vec3 location) {
-        // Pick Up / Repair, 2026-10-26 (health system work) -- owner-only, sneak+right-click is an
-        // alternate trigger for the same real GUI-button actions (see WagonScreen's own doc), not a
-        // substitute confirm mechanism -- the actual "Are you sure?" dialog is a real client-side
-        // ConfirmActionScreen, opened via #requestPickUpConfirm's own clientbound payload (never
-        // referenced directly here -- this method runs on both sides, and a client-only type
-        // reference here would crash a dedicated server on class load, per the root project's own
-        // CLAUDE.md -- #requestPickUpConfirm itself self-guards on `player instanceof ServerPlayer`,
-        // so calling it from this method's client-side invocation is already a harmless no-op with
-        // no extra `isClientSide()` check needed here). Holding a Wheels item matching this wagon's
-        // own wood species -> Repair (no confirm needed, matches the GUI button's own behavior) --
-        // this one DOES need the `isClientSide()` guard, since it mutates state directly rather than
-        // going through a self-guarding network call. Checked first, before the existing
-        // sneak-falls-through-to-cargo behavior below -- a non-owner's sneak+right-click is
-        // unaffected (still falls through to cargo, unchanged).
+        // Repair, 2026-10-26 (health system work) -- owner-only, holding a Wheels item matching this
+        // wagon's own wood species -> Repair (no confirm needed, matches the GUI button's own
+        // behavior). Needs the `isClientSide()` guard, since it mutates state directly rather than
+        // going through a self-guarding network call.
+        //
+        // Real user correction, 2026-10-30: "I told you days ago to remove the shift + right click
+        // on wagon to ask if you wanted to pick it up" -- the empty-hand sneak+right-click
+        // pick-up-confirm trigger (added 2026-10-26 alongside the GUI button as a second, redundant
+        // path to the same `#requestPickUpConfirm` dialog) is gone; Pick Up is now only reachable via
+        // the real "Pick Up" button in `WagonScreen`. An owner's empty-hand sneak+right-click now
+        // falls through to cargo, same as it already did for a non-owner.
         if (player.isShiftKeyDown() && this.isOwner(player)) {
             final ItemStack held = player.getItemInHand(hand);
-            if (held.isEmpty()) {
-                this.requestPickUpConfirm(player);
-                return InteractionResult.SUCCESS;
-            }
             // Real user request, 2026-10-28: "I want to be able to take a wagon that was crafted
             // with 1 kind wheel, and be able to replace the wheels if broken with a different kind
             // of wheel, and actually see the new style of wheel" -- widened from only accepting
