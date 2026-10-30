@@ -196,6 +196,11 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
     }
 
     @Override
+    protected int cargoSlotOffset() {
+        return MOUNT_SLOT_COUNT_OFFSET;
+    }
+
+    @Override
     protected void defineSynchedData(final SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(DATA_MAX_SPEED, 0.0F);

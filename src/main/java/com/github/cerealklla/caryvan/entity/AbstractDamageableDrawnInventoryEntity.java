@@ -44,6 +44,23 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
         return this.containerSize;
     }
 
+    /**
+     * The first real cargo slot index -- {@code 0} by default, overridden by a subclass (e.g.
+     * {@link WagonEntity}, {@link CarriageEntity}) whose own menu reserves a block of leading
+     * slots for {@code menu.MountSlot}/{@code menu.CompanionSlot}. Real live-test bug, 2026-10-30:
+     * {@link #onWheelBroken} and {@link #handleRepairFromCargo}'s own cargo scans both looped the
+     * whole container from index 0, unaware a Wagon's/Carriage's real cargo doesn't start there --
+     * a newly-dropped Broken Wheel landed directly in the first reserved Mount slot (the Wagon's own
+     * "left slot"), and removing it from there then wrongly triggered {@code MountSlot}/{@code
+     * CompanionSlot}'s Broken-cart 50%-destroy-on-take confirmation, a mechanic meant only for real
+     * Summon Stones/Companions -- "you keep putting the broken wheels in the left slots... it
+     * destroyed them when I tried to take them out." Every cargo-only scan in this class and in
+     * {@link CarriageEntity#repairAdditionalParts} now starts from this offset instead of a bare 0.
+     */
+    protected int cargoSlotOffset() {
+        return 0;
+    }
+
     @Override
     public boolean isEmpty() {
         return this.isChestVehicleEmpty();
@@ -193,7 +210,7 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
             // path's own behavior.
             final java.util.Map<net.minecraft.world.level.block.state.properties.WoodType, Integer> availableBySpecies =
                     new java.util.HashMap<>();
-            for (int i = 0; i < this.getContainerSize(); i++) {
+            for (int i = cargoSlotOffset(); i < this.getContainerSize(); i++) {
                 final ItemStack stack = this.getItem(i);
                 if (stack.isEmpty()) {
                     continue;
@@ -214,7 +231,7 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
                 totalFixed += fixed;
                 final net.minecraft.world.item.Item wheelsItem = com.github.cerealklla.caryvan.registration.ModItems.wheelsFor(species);
                 int remaining = fixed;
-                for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+                for (int i = cargoSlotOffset(); i < this.getContainerSize() && remaining > 0; i++) {
                     final ItemStack stack = this.getItem(i);
                     if (stack.getItem() == wheelsItem) {
                         final int take = Math.min(remaining, stack.getCount());
@@ -262,7 +279,7 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
     protected void onWheelBroken(final int count) {
         final net.minecraft.world.item.Item brokenWheelItem = com.github.cerealklla.caryvan.registration.ModItems.BROKEN_WHEEL.get();
         int remaining = count;
-        for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+        for (int i = cargoSlotOffset(); i < this.getContainerSize() && remaining > 0; i++) {
             final ItemStack stack = this.getItem(i);
             if (stack.getItem() == brokenWheelItem && stack.getCount() < stack.getMaxStackSize()) {
                 final int room = stack.getMaxStackSize() - stack.getCount();
@@ -271,7 +288,7 @@ public abstract class AbstractDamageableDrawnInventoryEntity extends AbstractDam
                 remaining -= add;
             }
         }
-        for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+        for (int i = cargoSlotOffset(); i < this.getContainerSize() && remaining > 0; i++) {
             if (this.getItem(i).isEmpty()) {
                 final int add = Math.min(new ItemStack(brokenWheelItem).getMaxStackSize(), remaining);
                 this.setItem(i, new ItemStack(brokenWheelItem, add));

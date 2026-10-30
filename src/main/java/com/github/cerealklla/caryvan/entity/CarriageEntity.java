@@ -134,6 +134,13 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         super(entityType, level, CarriageMenu.CONTAINER_SIZE);
     }
 
+    private static final int MOUNT_SLOT_COUNT_OFFSET = CarriageMenu.MOUNT_SLOT_COUNT + CarriageMenu.COMPANION_SLOT_COUNT;
+
+    @Override
+    protected int cargoSlotOffset() {
+        return MOUNT_SLOT_COUNT_OFFSET;
+    }
+
     /** Registered in {@code CaryvanMod#registerAttributes} -- see {@code WagonEntity#createAttributes}'s own doc. */
     public static net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder createAttributes() {
         return AbstractDamageableDrawnEntity.createAttributes(BASE_MAX_HEALTH);
@@ -1051,7 +1058,7 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         }
         final Item doorItem = ModItems.doorFor(this.getWoodType());
         int available = 0;
-        for (int i = 0; i < this.getContainerSize(); i++) {
+        for (int i = cargoSlotOffset(); i < this.getContainerSize(); i++) {
             final ItemStack stack = this.getItem(i);
             if (stack.getItem() == doorItem) {
                 available += stack.getCount();
@@ -1064,7 +1071,7 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         this.brokenDoorCount -= toFix;
         applyBrokenDoorCount();
         int remaining = toFix;
-        for (int i = 0; i < this.getContainerSize() && remaining > 0; i++) {
+        for (int i = cargoSlotOffset(); i < this.getContainerSize() && remaining > 0; i++) {
             final ItemStack stack = this.getItem(i);
             if (stack.getItem() == doorItem) {
                 final int take = Math.min(remaining, stack.getCount());
