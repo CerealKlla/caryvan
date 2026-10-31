@@ -1,5 +1,6 @@
 package com.github.cerealklla.caryvan;
 
+import com.github.cerealklla.caryvan.command.CaryvanCommands;
 import com.github.cerealklla.caryvan.interaction.CartMountDeathListener;
 import com.github.cerealklla.caryvan.interaction.CartMountDebugListener;
 import com.github.cerealklla.caryvan.interaction.CartMountInteractionListener;
@@ -77,6 +78,10 @@ public class CaryvanMod {
         // recalculated off every real discrete event that could change it, never a tick poll. See
         // that class's own doc.
         NeoForge.EVENT_BUS.register(new WagonRiderInventoryListener());
+        // Real user request, 2026-10-30: "did you add a command i can call to see what the stats
+        // are for the carriage i'm riding?" -- see that class's own doc.
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent event) ->
+                CaryvanCommands.register(event.getDispatcher()));
 
         // Replaces manually crafting/finding a Hand Cart while testing -- contributed into Kyt's
         // mod-managed "Dev" Kyt (/kyt getDev), same pattern Blueprynts/Settlemynts already use for

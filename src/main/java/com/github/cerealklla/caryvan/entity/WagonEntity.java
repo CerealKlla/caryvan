@@ -218,16 +218,30 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
      * interaction.WagonRiderInventoryListener} covers for a riding player's own inventory.
      */
     public void recalculateMaxSpeed() {
+        this.entityData.set(DATA_MAX_SPEED, (float) computeSpeedBreakdown().finalMaxSpeed());
+    }
+
+    /**
+     * Every term {@link #recalculateMaxSpeed()}'s formula actually computes, exposed structurally
+     * (not just the final number) for {@code command.CaryvanCommands}' real user-facing "/caryvan
+     * stats" command, 2026-10-30 -- "explain the calculated speed." Extracted out of
+     * {@link #recalculateMaxSpeed()} itself so both call sites share the identical math with no
+     * duplication risk.
+     */
+    public SpeedBreakdown computeSpeedBreakdown() {
+        final java.util.List<SpeedBreakdown.MountSpeed> mounts = new java.util.ArrayList<>();
         double speedTotal = 0.0D;
-        int mountCount = 0;
         if (this.leadMount instanceof LivingEntity livingLead) {
-            speedTotal += livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED);
-            mountCount++;
+            final double speed = livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED);
+            mounts.add(new SpeedBreakdown.MountSpeed("Lead Horse", speed));
+            speedTotal += speed;
         }
         if (this.teamMount != null && this.teamMount.isAlive() && this.teamMount instanceof LivingEntity livingTeam) {
-            speedTotal += livingTeam.getAttributeValue(Attributes.MOVEMENT_SPEED);
-            mountCount++;
+            final double speed = livingTeam.getAttributeValue(Attributes.MOVEMENT_SPEED);
+            mounts.add(new SpeedBreakdown.MountSpeed("Team Horse", speed));
+            speedTotal += speed;
         }
+        final int mountCount = mounts.size();
         final double baseMaxSpeed = mountCount == 0 ? 0.0D : (speedTotal / mountCount) * BASE_SPEED_FRACTION;
 
         int filledCargoSlots = 0;
@@ -251,8 +265,26 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         final double loadFraction = totalCapacity <= 0 ? 0.0D
                 : (double) (filledCargoSlots + riderUsedSlots) / totalCapacity;
 
-        final double currentMaxSpeed = baseMaxSpeed * (1.0D - LOAD_SPEED_PENALTY * loadFraction);
-        this.entityData.set(DATA_MAX_SPEED, (float) currentMaxSpeed);
+        final double finalMaxSpeed = baseMaxSpeed * (1.0D - LOAD_SPEED_PENALTY * loadFraction);
+        return new SpeedBreakdown(mounts, BASE_SPEED_FRACTION, baseMaxSpeed, filledCargoSlots, cargoSlotCount,
+                riderUsedSlots, riderCapacitySlots, LOAD_SPEED_PENALTY, loadFraction, finalMaxSpeed);
+    }
+
+    /** See {@link #computeSpeedBreakdown()}'s own doc. */
+    public record SpeedBreakdown(
+            java.util.List<MountSpeed> mounts,
+            double baseSpeedFraction,
+            double baseMaxSpeed,
+            int filledCargoSlots,
+            int cargoSlotCount,
+            int riderUsedSlots,
+            int riderCapacitySlots,
+            double loadSpeedPenalty,
+            double loadFraction,
+            double finalMaxSpeed) {
+
+        public record MountSpeed(String label, double movementSpeed) {
+        }
     }
 
     /** A rider's own 27 main-storage slots (hotbar/armor/offhand excluded) -- see {@link #recalculateMaxSpeed()}'s own doc. */

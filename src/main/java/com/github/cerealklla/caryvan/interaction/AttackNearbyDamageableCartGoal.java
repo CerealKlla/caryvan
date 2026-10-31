@@ -7,6 +7,7 @@ import com.github.cerealklla.caryvan.entity.AbstractDamageableDrawnEntity;
 
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.phys.AABB;
 
@@ -34,8 +35,24 @@ public final class AttackNearbyDamageableCartGoal extends Goal {
         this.setFlags(EnumSet.of(Goal.Flag.TARGET));
     }
 
+    /**
+     * Real report, 2026-10-30: "zombie pigmen [...] automatically target wagons" -- same root cause,
+     * and the same fix, as {@code settlemynts.guardhouse.GuardSightGoal#isActivelyHostile} (which
+     * stopped Guards unprovoked-attacking a calm Zombified Piglin): {@code ZombifiedPiglin implements
+     * NeutralMob} and is only ever hostile once something has actually provoked it ({@code isAngry()}
+     * -- confirmed against the same decompiled source that fix already cited), but this goal's plain
+     * {@code instanceof Enemy} injection in {@link DamageableCartTargetingListener} treated every
+     * hostile mob, Zombified Piglin included, as unconditionally willing to attack a Wagon/Carriage on
+     * sight. A {@link NeutralMob} candidate now only uses this goal once it's already {@link
+     * NeutralMob#isAngry() angry} -- every other {@link net.minecraft.world.entity.monster.Enemy}
+     * (Zombie, Skeleton, Phantom, Enderman, etc., none of which implement {@link NeutralMob}) is
+     * unaffected.
+     */
     @Override
     public boolean canUse() {
+        if (this.mob instanceof NeutralMob neutral && !neutral.isAngry()) {
+            return false;
+        }
         return this.mob.getTarget() == null && findNearestCart() != null;
     }
 

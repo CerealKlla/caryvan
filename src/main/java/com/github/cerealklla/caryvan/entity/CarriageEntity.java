@@ -732,6 +732,11 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
      * {@code protected} (same-package/subclass only); the renderer lives in a different package, so
      * these two small public getters exist purely for that cross-package read.
      */
+    /** Same kind of cross-package getter as {@link #getTeamLeftMount()}/{@link #getTeamRightMount()} -- added for {@code command.CaryvanCommands}' "/caryvan stats" output, 2026-10-30. */
+    public Entity getLeadMount() {
+        return this.leadMount;
+    }
+
     public Entity getTeamLeftMount() {
         return this.teamLeftMount;
     }
