@@ -90,23 +90,22 @@ public final class CaryvanCommands {
                 breakdown.riderCapacitySlots(), breakdown.loadFraction() * 100.0D), ChatFormatting.WHITE);
         send(player, String.format("  Speed penalty = Load x %.0f%% max penalty = %.1f%% off Base Max Speed",
                 breakdown.loadSpeedPenalty() * 100.0D, breakdown.loadFraction() * breakdown.loadSpeedPenalty() * 100.0D), ChatFormatting.WHITE);
-        send(player, String.format("  Final Max Speed = %.4f blocks/tick (~%.2f blocks/sec)",
-                breakdown.finalMaxSpeed(), breakdown.finalMaxSpeed() * 20.0D), ChatFormatting.GREEN);
+        send(player, String.format("  Load-adjusted speed = %.4f blocks/tick", breakdown.loadAdjustedSpeed()), ChatFormatting.WHITE);
+        send(player, String.format("  x Friction correction (x%.4f, see note below) = %.4f blocks/tick (~%.2f blocks/sec)",
+                breakdown.frictionCorrectionMultiplier(), breakdown.finalMaxSpeed(), breakdown.finalMaxSpeed() * 20.0D), ChatFormatting.GREEN);
         if (totalCapacity <= 0) {
             send(player, "  (no cargo slots or seated riders -- load counted as 0%)", ChatFormatting.GRAY);
         }
         // This Max Speed is fed directly into Entity#move() as a flat per-tick displacement (see
-        // WagonEntity#tickSteering) -- NOT run through vanilla's own travel()/friction-driven
-        // acceleration model the way a directly-ridden horse's real observed gallop speed is. A raw
-        // Attributes.MOVEMENT_SPEED value is tuned around that friction model producing vanilla's real
-        // felt speed, so using it as a direct move-vector length here reads as noticeably slower than
-        // actually riding the same horse -- a real, structural reason "barely trotting" can still be
-        // correct and expected even when this math is working exactly as designed.
-        send(player, "Note: this value is applied as a flat per-tick move distance, bypassing vanilla's",
+        // WagonEntity#tickSteering), which has no accumulation of its own to converge through -- so
+        // the Friction correction term above replicates vanilla's own real steady-state ratio
+        // (speed / (1 - friction), see AbstractDamageableDrawnEntity#GROUND_FRICTION_STEADY_STATE_
+        // MULTIPLIER's own doc) rather than leaving the result ~45% slower than actually riding the
+        // same horse would feel.
+        send(player, "Note: Friction correction replicates vanilla's real speed/(1-friction) steady-state",
                 ChatFormatting.GRAY);
-        send(player, "own friction/acceleration model -- a directly-ridden horse 'feels' faster than its",
+        send(player, "ratio for riding a horse directly -- without it this would read ~45% too slow.",
                 ChatFormatting.GRAY);
-        send(player, "raw Movement Speed attribute alone would suggest here.", ChatFormatting.GRAY);
     }
 
     private static void sendCarriageStats(final ServerPlayer player, final CarriageEntity carriage) {
@@ -129,8 +128,9 @@ public final class CaryvanCommands {
         send(player, "Calculated Max Speed:", ChatFormatting.YELLOW);
         if (carriage.getLeadMount() instanceof LivingEntity livingLead) {
             final double leadSpeed = livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED);
-            send(player, String.format("  Lead Horse speed x 2.0 = %.4f blocks/tick (~%.2f blocks/sec)",
-                    leadSpeed * 2.0D, leadSpeed * 40.0D), ChatFormatting.GREEN);
+            final double finalSpeed = leadSpeed * AbstractDamageableDrawnEntity.GROUND_FRICTION_STEADY_STATE_MULTIPLIER;
+            send(player, String.format("  Lead Horse speed x Friction correction (x%.4f) = %.4f blocks/tick (~%.2f blocks/sec)",
+                    AbstractDamageableDrawnEntity.GROUND_FRICTION_STEADY_STATE_MULTIPLIER, finalSpeed, finalSpeed * 20.0D), ChatFormatting.GREEN);
             send(player, "  (Team horses and cargo load do NOT currently affect this -- unlike Wagon's formula)",
                     ChatFormatting.GRAY);
         } else {

@@ -79,6 +79,33 @@ public abstract class AbstractDamageableDrawnEntity extends LivingEntity impleme
     private static final double MAX_SLACK_BLOCKS = 3.0;
     private static final double CATCH_UP_RATE = 0.2D;
 
+    /**
+     * Real report, 2026-10-30: "/caryvan stats" numbers checked out, but "we are moving at closer
+     * to 50% the max speed of either horse." Root cause, confirmed against the real decompiled
+     * {@code LivingEntity#travel}/{@code #handleRelativeFrictionAndCalculateMovement}/
+     * {@code #getFrictionInfluencedSpeed}/{@code Entity#moveRelative}: a real ridden horse never
+     * moves by a flat {@code Attributes.MOVEMENT_SPEED} amount per tick -- each tick it ADDS that
+     * much to its existing velocity, moves, then decays velocity by
+     * {@code friction = blockFriction * 0.91F} (0.546 on default ground, {@code blockFriction}
+     * 0.6 -- confirmed {@code getFrictionInfluencedSpeed(0.6F) == getSpeed()} exactly, since
+     * {@code 0.216F / (0.6F*0.6F*0.6F) == 1.0F}). That geometric accumulation converges to a real
+     * steady-state per-tick distance of {@code speed / (1 - friction)}, NOT {@code speed} itself --
+     * roughly 2.2x the raw attribute value on normal ground, matching known real vanilla walk/gallop
+     * speeds (e.g. a 0.1 Movement Speed player's well-known ~4.3 blocks/sec steady walk is
+     * {@code 0.1 * 20 / (1 - 0.546) ~= 4.4}, not {@code 0.1 * 20 = 2.0}).
+     *
+     * <p>{@code WagonEntity#tickSteering()}/{@code CarriageEntity#tickSteering()} both feed a
+     * calculated Max Speed directly into a single {@code Entity#move()} call per tick, bypassing
+     * this whole accumulation/friction model entirely (see {@code WagonEntity#tickSteering()}'s own
+     * doc for why -- true "remote control" driving, not a travel()-style AI goal). Without this
+     * correction that reads as roughly {@code 1 / 2.2 ~= 45%} of a directly-ridden horse's real felt
+     * speed -- matching the live report almost exactly. Both call sites now multiply their own
+     * calculated speed by this constant before handing it to {@code move()} -- not a guessed fudge
+     * factor (Carriage's own pre-existing {@code * 2.0D} was exactly this kind of guess, now
+     * replaced with the real derived value).
+     */
+    public static final double GROUND_FRICTION_STEADY_STATE_MULTIPLIER = 1.0D / (1.0D - (0.6D * 0.91D));
+
     private static final long RECENTLY_DAMAGED_MILLIS = 5L * 60L * 1000L;
     // Real bug, found live 2026-10-29: "I replaced 2 wheels at once on this wagon and it never
     // healed to full hp." Root cause -- healPerTick used to be a FLAT total ("heal 25% of base over

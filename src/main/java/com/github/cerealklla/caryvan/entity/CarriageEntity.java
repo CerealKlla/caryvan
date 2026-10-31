@@ -960,7 +960,9 @@ public final class CarriageEntity extends AbstractDamageableDrawnInventoryEntity
         final Vec3 direction = new Vec3(-sin * forward - cos * strafe, 0.0D, cos * forward - sin * strafe).normalize();
         double speed = STEER_SPEED_FALLBACK;
         if (this.leadMount instanceof LivingEntity livingLead) {
-            speed = livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED) * 2.0D;
+            // Real derived value, 2026-10-30, replacing the earlier guessed "* 2.0D" fudge -- see
+            // AbstractDamageableDrawnEntity#GROUND_FRICTION_STEADY_STATE_MULTIPLIER's own doc.
+            speed = livingLead.getAttributeValue(Attributes.MOVEMENT_SPEED) * GROUND_FRICTION_STEADY_STATE_MULTIPLIER;
         }
         this.leadMount.move(MoverType.SELF, direction.scale(speed));
     }

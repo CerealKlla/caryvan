@@ -265,9 +265,16 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         final double loadFraction = totalCapacity <= 0 ? 0.0D
                 : (double) (filledCargoSlots + riderUsedSlots) / totalCapacity;
 
-        final double finalMaxSpeed = baseMaxSpeed * (1.0D - LOAD_SPEED_PENALTY * loadFraction);
+        final double loadAdjustedSpeed = baseMaxSpeed * (1.0D - LOAD_SPEED_PENALTY * loadFraction);
+        // See AbstractDamageableDrawnEntity#GROUND_FRICTION_STEADY_STATE_MULTIPLIER's own doc -- this
+        // speed is fed directly into a single Entity#move() call per tick (tickSteering()), which has
+        // no friction/acceleration accumulation of its own to converge through, unlike a normally-
+        // ridden horse's real travel(). Without this, the final value reads as ~45% of a directly-
+        // ridden horse's real felt speed.
+        final double finalMaxSpeed = loadAdjustedSpeed * GROUND_FRICTION_STEADY_STATE_MULTIPLIER;
         return new SpeedBreakdown(mounts, BASE_SPEED_FRACTION, baseMaxSpeed, filledCargoSlots, cargoSlotCount,
-                riderUsedSlots, riderCapacitySlots, LOAD_SPEED_PENALTY, loadFraction, finalMaxSpeed);
+                riderUsedSlots, riderCapacitySlots, LOAD_SPEED_PENALTY, loadFraction, loadAdjustedSpeed,
+                GROUND_FRICTION_STEADY_STATE_MULTIPLIER, finalMaxSpeed);
     }
 
     /** See {@link #computeSpeedBreakdown()}'s own doc. */
@@ -281,6 +288,8 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
             int riderCapacitySlots,
             double loadSpeedPenalty,
             double loadFraction,
+            double loadAdjustedSpeed,
+            double frictionCorrectionMultiplier,
             double finalMaxSpeed) {
 
         public record MountSpeed(String label, double movementSpeed) {
