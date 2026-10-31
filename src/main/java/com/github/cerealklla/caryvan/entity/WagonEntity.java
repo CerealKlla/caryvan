@@ -200,6 +200,15 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         return MOUNT_SLOT_COUNT_OFFSET;
     }
 
+    /** Cross-package getters for {@code interaction.WagonMountPortalFollowListener} -- same precedent as {@code CarriageEntity#getLeadMount}/{@code #getTeamLeftMount}. */
+    public Entity getLeadMount() {
+        return this.leadMount;
+    }
+
+    public Entity getTeamMount() {
+        return this.teamMount;
+    }
+
     @Override
     protected void defineSynchedData(final SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
@@ -326,7 +335,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
     }
 
     @Override
-    protected double getSpacing() {
+    public double getSpacing() {
         return SPACING_BLOCKS;
     }
 
@@ -399,89 +408,6 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         }
     }
 
-    /**
-     * Real user request, 2026-10-30: "if the first horse in a wagon enters a portal, the entire
-     * wagon should teleport too." Confirmed against the real decompiled {@code Entity#teleport}/
-     * {@code #teleportCrossDimension} before building this: a horse walking into a portal on its own
-     * crosses dimension via vanilla's own generic, per-entity {@code handlePortal()} -- nothing
-     * Caryvan-specific triggers it, and nothing previously noticed or reacted to it. {@link
-     * #tickLeadSlot}/{@link #tickTeamSlot} re-resolve {@link #leadMount}/{@link #teamMount} every
-     * tick via {@code level.getEntity(mountId)}, which only ever searches THIS wagon's own level --
-     * so a lead mount that just crossed dimension would simply stop resolving there, silently
-     * stranding the wagon and team mount behind with no error and no recovery.
-     *
-     * <p>Checked here first, before any of this tick's other mount-slot logic runs, so a stale {@link
-     * #leadMount} is never fed into {@link #tickLeadSlot}'s own "not found, do nothing" branch. A
-     * cheap same-level liveness check short-circuits the common case (nothing crossed) every tick;
-     * only once that fails does this search every OTHER loaded dimension by UUID for where the lead
-     * mount actually went -- distinguishing a real portal crossing from a genuine death/despawn,
-     * which {@link #tickLeadSlot}'s own existing handling already covers correctly and is left alone.
-     *
-     * <p>{@link #teamMount} is explicitly teleported along too -- confirmed against the real
-     * decompiled {@code Leashable}/{@code Entity#teleport} that a vanilla lead does NOT carry a
-     * leashed mob across a dimension change on its own, so without this the team horse would simply
-     * be left behind in the old dimension. The wagon itself is teleported last, via {@code
-     * Entity#teleport(TeleportTransition)} -- generic for any {@code Entity}, confirmed to
-     * recursively carry this wagon's own real passengers (the driver/passenger bench seats) across
-     * with it, so a player riding along doesn't need any separate handling here.
-     *
-     * <p>{@code Entity#teleportCrossDimension} discards {@code this} and returns a brand-new entity
-     * instance in the destination level (confirmed against the real decompiled source) -- so once
-     * this method returns {@code true}, {@code this} WagonEntity is no longer the real, live wagon
-     * and {@link #tick()} must stop immediately rather than keep acting on a doomed instance. No
-     * manual re-linking of {@link #leadMount}/{@link #teamMount} is needed on the new instance --
-     * both are resolved fresh every tick from the Summoning Stone items in {@link #LEAD_SLOT}/
-     * {@link #TEAM_SLOT} (ordinary container NBT, carried over automatically by {@code
-     * Entity#restoreFrom}), which will now find their real mounts correctly once both are confirmed
-     * sitting in the same destination level.
-     *
-     * @return {@code true} if a cross-dimension follow was just triggered (the caller must stop using {@code this}).
-     */
-    private boolean followLeadMountAcrossDimension(final ServerLevel currentLevel) {
-        if (this.leadMount == null) {
-            return false;
-        }
-        if (this.leadMount.isAlive() && this.leadMount.level() == currentLevel) {
-            return false;
-        }
-        final UUID leadMountId = this.leadMount.getUUID();
-        ServerLevel destination = null;
-        Entity relocatedLead = null;
-        for (final ServerLevel otherLevel : currentLevel.getServer().getAllLevels()) {
-            if (otherLevel == currentLevel) {
-                continue;
-            }
-            final Entity found = otherLevel.getEntity(leadMountId);
-            if (found != null && found.isAlive()) {
-                destination = otherLevel;
-                relocatedLead = found;
-                break;
-            }
-        }
-        if (destination == null) {
-            // Genuinely dead/despawned, not a portal crossing -- #tickLeadSlot's own existing
-            // handling takes it from here.
-            return false;
-        }
-
-        final float destYaw = relocatedLead.getYRot();
-        final Vec3 leadPos = relocatedLead.position();
-        final float yawRad = (float) Math.toRadians(destYaw);
-        final double backX = Mth.sin(yawRad);
-        final double backZ = -Mth.cos(yawRad);
-        final Vec3 wagonTargetPos = leadPos.add(backX * SPACING_BLOCKS, 0.0D, backZ * SPACING_BLOCKS);
-
-        if (this.teamMount != null && this.teamMount.isAlive() && this.teamMount.level() == currentLevel) {
-            this.teamMount.teleport(new net.minecraft.world.level.portal.TeleportTransition(
-                    destination, leadPos, Vec3.ZERO, destYaw, 0.0F,
-                    net.minecraft.world.level.portal.TeleportTransition.PLACE_PORTAL_TICKET));
-        }
-        this.teleport(new net.minecraft.world.level.portal.TeleportTransition(
-                destination, wagonTargetPos, Vec3.ZERO, destYaw, 0.0F,
-                net.minecraft.world.level.portal.TeleportTransition.PLACE_PORTAL_TICKET));
-        return true;
-    }
-
     @Override
     public void tick() {
         super.tick();
@@ -498,12 +424,6 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
         // of the server-only block so the client's own copy self-cleans too.
         this.validateSeatOccupants();
         if (!(this.level() instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        if (followLeadMountAcrossDimension(serverLevel)) {
-            // This instance was just discarded by Entity#teleportCrossDimension -- the real wagon
-            // going forward is the new instance it returned, which picks up normally (including
-            // re-resolving #leadMount/#teamMount) from its own next tick. See this method's own doc.
             return;
         }
         // Real live-test bug, 2026-10-26: mounts were discarded once by #onEnterBrokenState's own
@@ -549,6 +469,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
     /** Same upkeep shape as {@code AnimalCartEntity#tickMountSlot}, keyed to {@link #leadMount} -- no longer calls {@link #setPulling} directly, see {@link #syncWagonPullTarget()}. */
     private void tickLeadSlot(final ServerLevel level) {
         if (this.leadMount != null && !stoneClaims(LEAD_SLOT, this.leadMount)) {
+            unregisterMount(this.leadMount.getUUID());
             this.leadMount.discard();
             this.leadMount = null;
             recalculateMaxSpeed();
@@ -580,6 +501,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
             if (this.leadMount != mount) {
                 prepareCartMount(mount);
                 this.leadMount = mount;
+                registerMount(mount.getUUID());
                 recalculateMaxSpeed();
             }
         }
@@ -588,6 +510,7 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
     /** Same shape as {@link #tickLeadSlot}, tracking {@link #teamMount} instead. */
     private void tickTeamSlot(final ServerLevel level) {
         if (this.teamMount != null && !stoneClaims(TEAM_SLOT, this.teamMount)) {
+            unregisterMount(this.teamMount.getUUID());
             this.teamMount.discard();
             this.teamMount = null;
             recalculateMaxSpeed();
@@ -613,9 +536,42 @@ public final class WagonEntity extends AbstractDamageableDrawnInventoryEntity im
             if (this.teamMount != mount) {
                 prepareCartMount(mount);
                 this.teamMount = mount;
+                registerMount(mount.getUUID());
                 recalculateMaxSpeed();
             }
         }
+    }
+
+    // --- Portal-follow registry, 2026-10-30 ----------------------------------------------------
+
+    /**
+     * Real user request: "if the first horse in a wagon enters a portal, the entire wagon should
+     * teleport too." The original attempt checked every tick whether {@link #leadMount} had
+     * silently vanished from this wagon's own level -- correctly flagged as the wrong shape
+     * ("again you are supposed to avoid doing anything with ticks"), and rebuilt event-driven
+     * instead: {@code interaction.WagonMountPortalFollowListener} reacts to a mount's own real
+     * {@code EntityJoinLevelEvent} (the same "entity entered a level" hook {@code
+     * summoning.AllayGoalInjectionListener} already relies on elsewhere in this suite, confirmed
+     * fired for the brand-new entity instance {@code Entity#teleportCrossDimension} creates in the
+     * destination level) -- a genuine occurrence, not a per-tick guess. This UUID-keyed registry is
+     * what lets that listener, given only the mount entity that just joined, find which Wagon (if
+     * any) owns it: updated only at the existing points {@link #tickLeadSlot}/{@link #tickTeamSlot}
+     * already assign/clear {@link #leadMount}/{@link #teamMount} -- the same frequency those fields
+     * already change at, not a new poll of any kind.
+     */
+    private static final java.util.Map<UUID, UUID> MOUNT_TO_WAGON = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void registerMount(final UUID mountId) {
+        MOUNT_TO_WAGON.put(mountId, this.getUUID());
+    }
+
+    private static void unregisterMount(final UUID mountId) {
+        MOUNT_TO_WAGON.remove(mountId);
+    }
+
+    /** Which Wagon (by UUID) currently claims {@code mountId} as its lead or team mount, if any -- used by {@code interaction.WagonMountPortalFollowListener}. */
+    public static Optional<UUID> wagonOwning(final UUID mountId) {
+        return Optional.ofNullable(MOUNT_TO_WAGON.get(mountId));
     }
 
     /**

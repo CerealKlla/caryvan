@@ -5,6 +5,7 @@ import com.github.cerealklla.caryvan.interaction.CartMountDeathListener;
 import com.github.cerealklla.caryvan.interaction.CartMountDebugListener;
 import com.github.cerealklla.caryvan.interaction.CartMountInteractionListener;
 import com.github.cerealklla.caryvan.interaction.DamageableCartTargetingListener;
+import com.github.cerealklla.caryvan.interaction.WagonMountPortalFollowListener;
 import com.github.cerealklla.caryvan.interaction.WagonRiderInventoryListener;
 import com.github.cerealklla.caryvan.network.ToggleSlowPayload;
 import com.github.cerealklla.caryvan.recipe.CarriageCraftingGate;
@@ -78,6 +79,10 @@ public class CaryvanMod {
         // recalculated off every real discrete event that could change it, never a tick poll. See
         // that class's own doc.
         NeoForge.EVENT_BUS.register(new WagonRiderInventoryListener());
+        // Real user request, 2026-10-30: "if the first horse in a wagon enters a portal, the entire
+        // wagon should teleport too" -- event-driven (EntityJoinLevelEvent), not tick-polled, see
+        // that class's own doc.
+        NeoForge.EVENT_BUS.register(new WagonMountPortalFollowListener());
         // Real user request, 2026-10-30: "did you add a command i can call to see what the stats
         // are for the carriage i'm riding?" -- see that class's own doc.
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.RegisterCommandsEvent event) ->
