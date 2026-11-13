@@ -74,6 +74,15 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
  * <p>Once clear, the wagon itself is teleported via {@code Entity#teleport(TeleportTransition)},
  * generic for any {@code Entity} and confirmed to recursively carry its own real passengers (the
  * driver/passenger bench seats) along with it.
+ *
+ * <p><b>Updated 2026-11-13</b> -- Nuclyus now disables vanilla's own automatic in-portal crossing
+ * by default (see its own CLAUDE.md "Plans for future" entry), cancelling it whenever the
+ * traveling entity is standing on a real portal block at that moment. The team mount/wagon
+ * teleported here routinely still overlap the exact same portal plane the lead mount just crossed
+ * through, so every direct {@code .teleport(TeleportTransition)} call in {@link
+ * #followWagonToMount} is wrapped in {@code nuclyus.api.Nuclyus#runPortalCrossingBypassed} -- this
+ * is a deliberate, mod-initiated crossing, not vanilla's own detection, and must not be cancelled
+ * just because of where it happens to land.
  */
 public final class WagonMountPortalFollowListener {
 
@@ -125,14 +134,16 @@ public final class WagonMountPortalFollowListener {
         final Vec3 wagonPos = landingPos.add(clearDirection.scale(LEAD_CLEARANCE_BLOCKS - TEAM_GAP_BLOCKS - wagon.getSpacing()));
         final float destYaw = mount.getYRot();
 
-        for (final Entity other : new Entity[]{wagon.getLeadMount(), wagon.getTeamMount()}) {
-            if (other != null && other != mount && other.isAlive() && other.level() != destination) {
-                other.teleport(new TeleportTransition(
-                        destination, teamPos, Vec3.ZERO, destYaw, 0.0F, TeleportTransition.PLACE_PORTAL_TICKET));
+        com.github.cerealklla.nuclyus.api.Nuclyus.runPortalCrossingBypassed(() -> {
+            for (final Entity other : new Entity[]{wagon.getLeadMount(), wagon.getTeamMount()}) {
+                if (other != null && other != mount && other.isAlive() && other.level() != destination) {
+                    other.teleport(new TeleportTransition(
+                            destination, teamPos, Vec3.ZERO, destYaw, 0.0F, TeleportTransition.PLACE_PORTAL_TICKET));
+                }
             }
-        }
-        wagon.teleport(new TeleportTransition(
-                destination, wagonPos, Vec3.ZERO, destYaw, 0.0F, TeleportTransition.PLACE_PORTAL_TICKET));
+            wagon.teleport(new TeleportTransition(
+                    destination, wagonPos, Vec3.ZERO, destYaw, 0.0F, TeleportTransition.PLACE_PORTAL_TICKET));
+        });
     }
 
     /**
